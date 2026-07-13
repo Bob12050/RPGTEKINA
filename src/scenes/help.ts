@@ -3,7 +3,7 @@
 // ============================================================
 import type { App } from '../core/app';
 import type { Scene } from '../core/scene';
-import { drawText, drawWindow, FONT_SMALL, SCREEN_H, SCREEN_W } from '../ui/window';
+import { drawText, drawWindow, FONT, FONT_SMALL, view, isPortrait, wrapText } from '../ui/window';
 
 const PAGES: string[][] = [
   [
@@ -66,17 +66,26 @@ export class HelpScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
-    const w = 720;
-    const h = 420;
-    const x = (SCREEN_W - w) / 2;
-    const y = (SCREEN_H - h) / 2;
+    ctx.fillRect(0, 0, view.w, view.h);
+    const p = isPortrait();
+    const w = Math.min(720, view.w - 16);
+    const h = p ? Math.min(560, view.h - 120) : 420;
+    const x = (view.w - w) / 2;
+    const y = (view.h - h) / 2;
     drawWindow(ctx, x, y, w, h);
     const page = PAGES[Math.min(this.page, PAGES.length - 1)]!;
+    // 縦持ちは小さめフォント+折り返しで収める
+    const font = p ? FONT_SMALL : undefined;
+    const lineH = p ? 27 : 38;
+    let ly = y + 36;
     page.forEach((line, i) => {
-      drawText(ctx, line, x + 40, y + 40 + i * 38, { color: i === 0 ? '#ffd94a' : '#ffffff' });
+      const wrapped = line === '' ? [''] : wrapText(ctx, line, w - 70, font ?? FONT);
+      for (const seg of wrapped) {
+        drawText(ctx, seg, x + 32, ly, { color: i === 0 ? '#ffd94a' : '#ffffff', font });
+        ly += lineH;
+      }
     });
-    drawText(ctx, `${this.page + 1} / ${PAGES.length}  (Z: つぎへ / X: とじる)`, x + w / 2, y + h - 40, {
+    drawText(ctx, `${this.page + 1} / ${PAGES.length}  (A: つぎへ / B: とじる)`, x + w / 2, y + h - 36, {
       align: 'center',
       font: FONT_SMALL,
       color: '#aaaacc',

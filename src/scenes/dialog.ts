@@ -6,7 +6,7 @@ import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
 import type { Npc } from '../core/types';
 import { healParty } from '../game/state';
-import { drawText, drawWindow, Menu, MessageBox, SCREEN_H, SCREEN_W } from '../ui/window';
+import { drawText, drawWindow, Menu, MessageBox, view, isPortrait } from '../ui/window';
 import { BattleScene } from './battle';
 import { FarmScene } from './farm';
 import { ShopScene } from './shop';
@@ -95,11 +95,12 @@ export class DialogScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    this.messages.draw(ctx, 60, SCREEN_H - 160, SCREEN_W - 120, 140);
+    const m = isPortrait() ? 10 : 60;
+    this.messages.draw(ctx, m, view.h - 160, view.w - m * 2, 140);
     if (this.phase === 'bossConfirm') {
-      drawWindow(ctx, SCREEN_W - 320, SCREEN_H - 320, 260, 60);
-      drawText(ctx, 'どうする?', SCREEN_W - 300, SCREEN_H - 302);
-      this.bossMenu.draw(ctx, SCREEN_W - 320, SCREEN_H - 250, 260);
+      drawWindow(ctx, view.w - 320, view.h - 320, 260, 60);
+      drawText(ctx, 'どうする?', view.w - 300, view.h - 302);
+      this.bossMenu.draw(ctx, view.w - 320, view.h - 250, 260);
     }
   }
 }

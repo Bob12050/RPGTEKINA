@@ -14,7 +14,7 @@ import { canSynthesize, inheritableSkills, MAX_INHERIT, performSynthesis } from 
 import { addMonster, removeMonster } from '../game/state';
 import { monsterLabel, speciesInfo } from '../ui/format';
 import { drawMonster } from '../ui/sprites';
-import { drawText, drawWindow, FONT_SMALL, Menu, MessageBox, SCREEN_H, SCREEN_W } from '../ui/window';
+import { drawText, drawWindow, FONT_SMALL, Menu, MessageBox, view, isPortrait, wrapText } from '../ui/window';
 
 type Phase = 'menu' | 'pickA' | 'pickB' | 'skills' | 'confirm' | 'result' | 'hints';
 
@@ -212,8 +212,7 @@ export class SynthesisScene implements Scene {
           this.phase = 'menu';
           return;
         }
-        const perPage = 6;
-        const pages = Math.ceil(SPECIAL_RECIPES.length / perPage);
+        const pages = Math.ceil(SPECIAL_RECIPES.length / this.hintsPerPage());
         if (key === 'confirm' || key === 'right' || key === 'down') {
           this.hintPage += 1;
           if (this.hintPage >= pages) this.phase = 'menu';
@@ -225,65 +224,99 @@ export class SynthesisScene implements Scene {
     }
   }
 
+  /** ヒント1ページあたりの件数(縦持ちは行間が広いため少なめ) */
+  private hintsPerPage(): number {
+    return isPortrait() ? 4 : 6;
+  }
+
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = 'rgba(10,5,25,0.85)';
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    ctx.fillRect(0, 0, view.w, view.h);
+    const p = isPortrait();
 
-    drawWindow(ctx, 40, 20, SCREEN_W - 80, 56);
-    drawText(ctx, 'はいごうの やかた', SCREEN_W / 2, 36, { align: 'center', color: '#ffd94a' });
+    drawWindow(ctx, p ? 12 : 40, p ? 12 : 20, view.w - (p ? 24 : 80), 52);
+    drawText(ctx, 'はいごうの やかた', view.w / 2, p ? 26 : 34, { align: 'center', color: '#ffd94a' });
 
     switch (this.phase) {
       case 'menu':
-        this.mainMenu.draw(ctx, 60, 110, 300);
+        this.mainMenu.draw(ctx, p ? 20 : 60, p ? 100 : 110, 300);
         break;
       case 'pickA':
-      case 'pickB':
-        drawText(ctx, this.phase === 'pickA' ? '1たいめの おやを えらぼう' : '2たいめの おやを えらぼう', 60, 100, {
-          font: FONT_SMALL,
-        });
-        this.listMenu.draw(ctx, 60, 130, 460);
-        if (this.parentA) this.drawParentCard(ctx, this.parentA, 560, 130, 'おや1');
+      case 'pickB': {
+        const hint =
+          this.phase === 'pickA'
+            ? '1たいめの おやを えらぼう'
+            : `おや1: ${this.parentA?.nickname ?? ''} → 2たいめを えらぼう`;
+        drawText(ctx, hint, p ? 16 : 60, p ? 82 : 100, { font: FONT_SMALL });
+        this.listMenu.draw(ctx, p ? 12 : 60, p ? 108 : 130, p ? view.w - 24 : 460);
+        if (!p && this.parentA) this.drawParentCard(ctx, this.parentA, 560, 130, 'おや1', 400);
         break;
+      }
       case 'skills':
       case 'confirm': {
-        if (this.parentA) this.drawParentCard(ctx, this.parentA, 40, 100, 'おや1');
-        if (this.parentB) this.drawParentCard(ctx, this.parentB, 40, 250, 'おや2');
-        this.drawChildPreview(ctx, 40, 400);
-        drawText(ctx, `ひきつぐ とくぎを えらぼう (さいだい${MAX_INHERIT}つ)`, 480, 100, { font: FONT_SMALL });
-        this.skillMenu.draw(ctx, 480, 130, 440);
+        if (p) {
+          // 縦持ち: 子プレビューを上、とくぎ選択を下に
+          if (this.parentA && this.parentB) {
+            drawText(ctx, `おや: ${this.parentA.nickname} × ${this.parentB.nickname}`, 16, 78, {
+              font: FONT_SMALL,
+              color: '#aaaacc',
+            });
+          }
+          this.drawChildPreview(ctx, 12, 102, view.w - 24);
+          drawText(ctx, `ひきつぐ とくぎ (さいだい${MAX_INHERIT}つ)`, 16, 296, { font: FONT_SMALL });
+          this.skillMenu.draw(ctx, 12, 322, view.w - 24);
+        } else {
+          if (this.parentA) this.drawParentCard(ctx, this.parentA, 40, 100, 'おや1', 400);
+          if (this.parentB) this.drawParentCard(ctx, this.parentB, 40, 250, 'おや2', 400);
+          this.drawChildPreview(ctx, 40, 400, 400);
+          drawText(ctx, `ひきつぐ とくぎを えらぼう (さいだい${MAX_INHERIT}つ)`, 480, 100, { font: FONT_SMALL });
+          this.skillMenu.draw(ctx, 480, 130, 440);
+        }
         if (this.phase === 'confirm') {
-          drawWindow(ctx, SCREEN_W / 2 - 200, SCREEN_H / 2 - 120, 400, 70);
-          drawText(ctx, 'この2たいで はいごうする?', SCREEN_W / 2, SCREEN_H / 2 - 98, { align: 'center' });
-          drawText(ctx, '(おやは いなくなるよ)', SCREEN_W / 2, SCREEN_H / 2 - 72, {
+          const cw = Math.min(400, view.w - 24);
+          drawWindow(ctx, view.w / 2 - cw / 2, view.h / 2 - 120, cw, 70);
+          drawText(ctx, 'この2たいで はいごうする?', view.w / 2, view.h / 2 - 98, { align: 'center' });
+          drawText(ctx, '(おやは いなくなるよ)', view.w / 2, view.h / 2 - 72, {
             align: 'center',
             font: FONT_SMALL,
             color: '#f0a0a0',
           });
-          this.confirmMenu.draw(ctx, SCREEN_W / 2 - 200, SCREEN_H / 2 - 40, 400);
+          this.confirmMenu.draw(ctx, view.w / 2 - cw / 2, view.h / 2 - 40, cw);
         }
         break;
       }
-      case 'result':
-        this.messages.draw(ctx, 60, SCREEN_H - 170, SCREEN_W - 120, 150);
+      case 'result': {
+        const m = p ? 12 : 60;
+        this.messages.draw(ctx, m, view.h - 170, view.w - m * 2, 150);
         break;
+      }
       case 'hints': {
-        const perPage = 6;
+        const perPage = this.hintsPerPage();
         const start = this.hintPage * perPage;
         const slice = SPECIAL_RECIPES.slice(start, start + perPage);
-        drawWindow(ctx, 60, 100, SCREEN_W - 120, 420);
-        drawText(ctx, 'とくしゅはいごうの うわさ', SCREEN_W / 2, 120, { align: 'center', color: '#ffd94a' });
+        const wx = p ? 12 : 60;
+        const wy = p ? 76 : 100;
+        const wh = p ? view.h - 200 : 420;
+        drawWindow(ctx, wx, wy, view.w - wx * 2, wh);
+        drawText(ctx, 'とくしゅはいごうの うわさ', view.w / 2, wy + 20, { align: 'center', color: '#ffd94a' });
         const state = requireState(this.app);
-        slice.forEach((r, i) => {
+        let ly = wy + 64;
+        for (const r of slice) {
           const known = state.scoutedSpecies.includes(r.child);
           const childName = known ? getSpecies(r.child).name : '？？？';
-          drawText(ctx, `・${r.hint}`, 100, 165 + i * 58, { font: FONT_SMALL });
-          drawText(ctx, `→ ${childName}`, 130, 165 + i * 58 + 26, { font: FONT_SMALL, color: known ? '#8fd44a' : '#8888aa' });
-        });
+          const lines = wrapText(ctx, `・${r.hint}`, view.w - wx * 2 - 70, FONT_SMALL);
+          for (const line of lines) {
+            drawText(ctx, line, wx + 36, ly, { font: FONT_SMALL });
+            ly += 24;
+          }
+          drawText(ctx, `→ ${childName}`, wx + 64, ly, { font: FONT_SMALL, color: known ? '#8fd44a' : '#8888aa' });
+          ly += p ? 36 : 34;
+        }
         drawText(
           ctx,
-          `${this.hintPage + 1} / ${Math.ceil(SPECIAL_RECIPES.length / perPage)}  (Z:つぎ / X:もどる)`,
-          SCREEN_W / 2,
-          490,
+          `${this.hintPage + 1} / ${Math.ceil(SPECIAL_RECIPES.length / perPage)}  (A:つぎ / B:もどる)`,
+          view.w / 2,
+          wy + wh - 30,
           { align: 'center', font: FONT_SMALL, color: '#aaaacc' },
         );
         break;
@@ -291,9 +324,16 @@ export class SynthesisScene implements Scene {
     }
   }
 
-  private drawParentCard(ctx: CanvasRenderingContext2D, m: MonsterInstance, x: number, y: number, title: string): void {
+  private drawParentCard(
+    ctx: CanvasRenderingContext2D,
+    m: MonsterInstance,
+    x: number,
+    y: number,
+    title: string,
+    w: number,
+  ): void {
     const sp = getSpecies(m.speciesId);
-    drawWindow(ctx, x, y, 400, 140);
+    drawWindow(ctx, x, y, w, 140);
     drawText(ctx, title, x + 20, y + 14, { font: FONT_SMALL, color: '#ffd94a' });
     drawMonster(ctx, sp.family, sp.palette, x + 20, y + 40, 5);
     drawText(ctx, monsterLabel(m), x + 120, y + 40, { font: FONT_SMALL });
@@ -301,9 +341,9 @@ export class SynthesisScene implements Scene {
     drawText(ctx, `とくぎ ${m.skillIds.length}こ`, x + 120, y + 92, { font: FONT_SMALL, color: '#aaaacc' });
   }
 
-  private drawChildPreview(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  private drawChildPreview(ctx: CanvasRenderingContext2D, x: number, y: number, w: number): void {
     const child = this.previewChild();
-    drawWindow(ctx, x, y, 400, 180);
+    drawWindow(ctx, x, y, w, 180);
     drawText(ctx, '▼ うまれる モンスター', x + 20, y + 14, { font: FONT_SMALL, color: '#8fd44a' });
     if (!child) return;
     const sp = getSpecies(child.speciesId);

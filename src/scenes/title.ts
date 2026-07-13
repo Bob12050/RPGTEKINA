@@ -7,7 +7,7 @@ import { getSpecies } from '../data/monsters';
 import { loadGame, hasSave } from '../game/save';
 import { newGame } from '../game/state';
 import { drawMonster } from '../ui/sprites';
-import { drawText, drawWindow, FONT_BIG, FONT_SMALL, Menu, SCREEN_H, SCREEN_W } from '../ui/window';
+import { drawText, drawWindow, FONT_BIG, FONT_SMALL, Menu, view, isPortrait } from '../ui/window';
 import { FieldScene } from './field';
 import { HelpScene } from './help';
 
@@ -56,36 +56,38 @@ export class TitleScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     // 夜空風の背景
-    const grad = ctx.createLinearGradient(0, 0, 0, SCREEN_H);
+    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
     grad.addColorStop(0, '#0a0a2e');
     grad.addColorStop(1, '#1a2a4a');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    ctx.fillRect(0, 0, view.w, view.h);
 
     // 星
     for (let i = 0; i < 40; i++) {
-      const x = (i * 137.5) % SCREEN_W;
-      const y = (i * 89.3) % (SCREEN_H * 0.6);
+      const x = (i * 137.5) % view.w;
+      const y = (i * 89.3) % (view.h * 0.6);
       const tw = (Math.sin(this.time * 2 + i) + 1) / 2;
       ctx.fillStyle = `rgba(255,255,255,${0.3 + tw * 0.5})`;
       ctx.fillRect(x, y, 2, 2);
     }
 
-    drawText(ctx, 'RPGTEKINA', SCREEN_W / 2, 110, { font: FONT_BIG, align: 'center', color: '#ffd94a' });
-    drawText(ctx, '〜モンスターマスターへの みち〜', SCREEN_W / 2, 160, { align: 'center' });
+    drawText(ctx, 'RPGTEKINA', view.w / 2, 110, { font: FONT_BIG, align: 'center', color: '#ffd94a' });
+    drawText(ctx, '〜モンスターマスターへの みち〜', view.w / 2, 160, { align: 'center' });
 
     // マスコットたち(ゆらゆら)
     const bounce = Math.sin(this.time * 3) * 6;
     const puni = getSpecies('puni');
     const dragon = getSpecies('chibidra');
     const imp = getSpecies('imp');
-    drawMonster(ctx, puni.family, puni.palette, SCREEN_W / 2 - 220, 230 + bounce, 5);
-    drawMonster(ctx, dragon.family, dragon.palette, SCREEN_W / 2 - 40, 236 - bounce, 5);
-    drawMonster(ctx, imp.family, imp.palette, SCREEN_W / 2 + 140, 230 + bounce, 5);
+    const spread = isPortrait() ? 150 : 180;
+    drawMonster(ctx, puni.family, puni.palette, view.w / 2 - spread - 40, 230 + bounce, 5);
+    drawMonster(ctx, dragon.family, dragon.palette, view.w / 2 - 40, 236 - bounce, 5);
+    drawMonster(ctx, imp.family, imp.palette, view.w / 2 + spread - 40, 230 + bounce, 5);
 
-    this.menu.draw(ctx, SCREEN_W / 2 - 150, 400, 300);
-    drawWindow(ctx, SCREEN_W / 2 - 300, 545, 600, 56);
-    drawText(ctx, '↑↓: えらぶ   Z / A: けってい   X / B: もどる', SCREEN_W / 2, 562, {
+    this.menu.draw(ctx, view.w / 2 - 150, isPortrait() ? 430 : 400, 300);
+    const fw = Math.min(600, view.w - 16);
+    drawWindow(ctx, view.w / 2 - fw / 2, view.h - 80, fw, 56);
+    drawText(ctx, '↑↓: えらぶ   Z / A: けってい   X / B: もどる', view.w / 2, view.h - 63, {
       align: 'center',
       font: FONT_SMALL,
     });

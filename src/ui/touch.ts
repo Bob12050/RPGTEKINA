@@ -65,24 +65,6 @@ const STYLE = `
   height: min(16vmin, 70px);
   font-size: min(5vmin, 21px);
 }
-#rotate-hint {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(8, 8, 24, 0.85);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.4);
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-size: 13px;
-  z-index: 11;
-  display: none;
-  pointer-events: none;
-}
-@media (orientation: portrait) {
-  #rotate-hint.touch-enabled { display: block; }
-}
 `;
 
 export function setupTouchControls(input: Input): void {
@@ -191,13 +173,4 @@ function buildUi(input: Input): void {
   root.appendChild(makeButton('touch-a', 'A', 'けってい', 'confirm'));
   root.appendChild(makeButton('touch-b', 'B', 'もどる', 'cancel'));
   document.body.appendChild(root);
-
-  // ---- 縦持ちヒント ----
-  const hint = document.createElement('div');
-  hint.id = 'rotate-hint';
-  hint.className = 'touch-enabled';
-  hint.textContent = '📱 よこ向きにすると あそびやすいよ!';
-  document.body.appendChild(hint);
-  // 10秒後に消す
-  setTimeout(() => hint.remove(), 10000);
 }

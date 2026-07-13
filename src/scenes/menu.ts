@@ -13,7 +13,7 @@ import { saveGame } from '../game/save';
 import { consumeItem } from '../game/state';
 import { monsterLabel, monsterNote, speciesInfo } from '../ui/format';
 import { drawMonster } from '../ui/sprites';
-import { drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, Menu, MessageBox, SCREEN_H, SCREEN_W } from '../ui/window';
+import { drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, Menu, MessageBox, view, isPortrait, wrapText } from '../ui/window';
 
 type Phase = 'main' | 'party' | 'itemPick' | 'itemTarget' | 'message';
 
@@ -196,18 +196,25 @@ export class PauseMenuScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    ctx.fillRect(0, 0, view.w, view.h);
     const state = requireState(this.app);
+    const p = isPortrait();
 
     // 所持金
-    drawWindow(ctx, SCREEN_W - 240, 16, 224, 56);
-    drawText(ctx, `${state.gold} G`, SCREEN_W - 44, 32, { align: 'right', color: '#ffd94a' });
+    const goldW = p ? 180 : 224;
+    drawWindow(ctx, view.w - goldW - 12, 12, goldW, 52);
+    drawText(ctx, `${state.gold} G`, view.w - 36, 26, { align: 'right', color: '#ffd94a' });
 
-    this.mainMenu.draw(ctx, 24, 24, 220);
-    if (this.phase === 'party') this.partyMenu.draw(ctx, 260, 24, 420, 'なかま');
-    if (this.phase === 'itemPick' || this.phase === 'itemTarget') this.itemMenu.draw(ctx, 260, 24, 380, 'どうぐ');
-    if (this.phase === 'itemTarget') this.targetMenu.draw(ctx, 300, 120, 420, 'だれに つかう?');
-    if (this.phase === 'message') this.messages.draw(ctx, 60, SCREEN_H - 150, SCREEN_W - 120, 130);
+    this.mainMenu.draw(ctx, p ? 12 : 24, p ? 12 : 24, p ? 190 : 220);
+    if (this.phase === 'party') this.partyMenu.draw(ctx, p ? 12 : 260, p ? 210 : 24, p ? view.w - 24 : 420, 'なかま');
+    if (this.phase === 'itemPick' || this.phase === 'itemTarget')
+      this.itemMenu.draw(ctx, p ? 12 : 260, p ? 210 : 24, p ? view.w - 24 : 380, 'どうぐ');
+    if (this.phase === 'itemTarget')
+      this.targetMenu.draw(ctx, p ? 24 : 300, p ? 330 : 120, p ? view.w - 48 : 420, 'だれに つかう?');
+    if (this.phase === 'message') {
+      const m = p ? 12 : 60;
+      this.messages.draw(ctx, m, view.h - 150, view.w - m * 2, 130);
+    }
   }
 }
 
@@ -234,19 +241,83 @@ export class StatusScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    ctx.fillRect(0, 0, view.w, view.h);
     const m = this.monster;
     const sp = getSpecies(m.speciesId);
     const ms = maxStats(m);
+    const bounce = Math.sin(this.time * 3) * 4;
 
+    if (isPortrait()) {
+      // 縦持ち: 1カラムで上から順に
+      const x = 12;
+      const y = 16;
+      const w = view.w - 24;
+      const h = view.h - 32;
+      drawWindow(ctx, x, y, w, h);
+
+      drawText(ctx, monsterLabel(m), x + w / 2, y + 18, { align: 'center' });
+      drawMonster(ctx, sp.family, sp.palette, x + w / 2 - 56, y + 52 + bounce, 7);
+      drawText(ctx, speciesInfo(m.speciesId), x + w / 2, y + 172, { align: 'center', font: FONT_SMALL, color: '#aaaacc' });
+
+      drawText(ctx, `HP ${m.hp}/${ms.hp}`, x + 28, y + 206, { font: FONT_SMALL });
+      drawGauge(ctx, x + 170, y + 210, w - 200, 9, ms.hp === 0 ? 0 : m.hp / ms.hp, hpColor(m.hp / ms.hp));
+      drawText(ctx, `MP ${m.mp}/${ms.mp}`, x + 28, y + 232, { font: FONT_SMALL });
+      drawGauge(ctx, x + 170, y + 236, w - 200, 9, ms.mp === 0 ? 0 : m.mp / ms.mp, '#4a8ae8');
+      drawText(ctx, `つぎのレベルまで あと ${expToNext(m.level) - m.exp}`, x + 28, y + 258, {
+        font: FONT_SMALL,
+        color: '#aaaacc',
+      });
+
+      drawText(ctx, 'ステータス', x + 28, y + 296, { color: '#ffd94a', font: FONT_SMALL });
+      const rows: [string, number][] = [
+        [STAT_NAMES.atk, ms.atk],
+        [STAT_NAMES.def, ms.def],
+        [STAT_NAMES.agi, ms.agi],
+        [STAT_NAMES.wis, ms.wis],
+      ];
+      rows.forEach(([label, value], i) => {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        drawText(ctx, label, x + 28 + col * 220, y + 326 + row * 30, { font: FONT_SMALL });
+        drawText(ctx, String(value), x + 28 + col * 220 + 180, y + 326 + row * 30, { align: 'right', font: FONT_SMALL });
+      });
+      drawText(ctx, `プラスち +${m.plus}`, x + w - 28, y + 296, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
+
+      drawText(ctx, 'とくぎ', x + 28, y + 400, { color: '#ffd94a', font: FONT_SMALL });
+      if (m.skillIds.length === 0) {
+        drawText(ctx, '(なし)', x + 28, y + 428, { font: FONT_SMALL, color: '#aaaacc' });
+      }
+      m.skillIds.forEach((id, i) => {
+        const s = getSkill(id);
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        drawText(ctx, s.name, x + 28 + col * 220, y + 428 + row * 28, { font: FONT_SMALL });
+        drawText(ctx, s.mpCost > 0 ? `MP${s.mpCost}` : '', x + 28 + col * 220 + 180, y + 428 + row * 28, {
+          align: 'right',
+          font: FONT_SMALL,
+          color: '#aaaacc',
+        });
+      });
+
+      const descLines = wrapText(ctx, sp.desc, w - 56, FONT_SMALL);
+      descLines.forEach((line, i) => {
+        drawText(ctx, line, x + w / 2, y + h - 30 - (descLines.length - i) * 24, {
+          align: 'center',
+          font: FONT_SMALL,
+          color: '#ccccee',
+        });
+      });
+      return;
+    }
+
+    // 横持ち: 3カラム
     const x = 80;
     const y = 40;
-    const w = SCREEN_W - 160;
-    const h = SCREEN_H - 80;
+    const w = view.w - 160;
+    const h = view.h - 80;
     drawWindow(ctx, x, y, w, h);
 
     // 左: スプライトと基本情報
-    const bounce = Math.sin(this.time * 3) * 4;
     drawMonster(ctx, sp.family, sp.palette, x + 60, y + 70 + bounce, 8);
     drawText(ctx, monsterLabel(m), x + 124, y + 24, { align: 'center' });
     drawText(ctx, speciesInfo(m.speciesId), x + 124, y + 220, { align: 'center', font: FONT_SMALL, color: '#aaaacc' });

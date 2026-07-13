@@ -26,10 +26,7 @@ import {
   FONT_SMALL,
   hpColor,
   Menu,
-  MessageBox,
-  SCREEN_H,
-  SCREEN_W,
-} from '../ui/window';
+  MessageBox, view, isPortrait } from '../ui/window';
 import { FieldScene } from './field';
 
 type Phase =
@@ -48,10 +45,12 @@ type TargetContext =
   | { mode: 'scout' }
   | { mode: 'item'; itemId: string };
 
-const MSG_X = 16;
-const MSG_Y = SCREEN_H - 140;
-const MSG_W = SCREEN_W - 32;
-const MSG_H = 124;
+/** メッセージウィンドウの位置(画面の向きで変わるため毎回計算) */
+function msgRect(): { x: number; y: number; w: number; h: number } {
+  const m = isPortrait() ? 8 : 16;
+  const h = isPortrait() ? 112 : 124;
+  return { x: m, y: view.h - h - m, w: view.w - m * 2, h };
+}
 
 export class BattleScene implements Scene {
   private battle: Battle;
@@ -445,7 +444,7 @@ export class BattleScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     // 背景
-    const grad = ctx.createLinearGradient(0, 0, 0, SCREEN_H);
+    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
     if (this.isBoss) {
       grad.addColorStop(0, '#1a0a14');
       grad.addColorStop(1, '#3d1424');
@@ -454,38 +453,44 @@ export class BattleScene implements Scene {
       grad.addColorStop(1, '#24344d');
     }
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    ctx.fillRect(0, 0, view.w, view.h);
     // 地面
+    const groundY = isPortrait() ? 390 : 330;
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     ctx.beginPath();
-    ctx.ellipse(SCREEN_W / 2, 330, 380, 70, 0, 0, Math.PI * 2);
+    ctx.ellipse(view.w / 2, groundY, Math.min(380, view.w * 0.44), 70, 0, 0, Math.PI * 2);
     ctx.fill();
 
     this.drawEnemies(ctx);
     this.drawAllyPanels(ctx);
 
-    // コマンド類
+    // コマンド類(縦持ちでは下側にまとめる)
+    const p = isPortrait();
     if (this.phase === 'command') {
-      this.mainMenu.draw(ctx, 16, 210, 220, 'コマンド');
+      this.mainMenu.draw(ctx, p ? 10 : 16, p ? 420 : 210, 210, 'コマンド');
       if (this.battle.scoutBoost > 1) {
-        drawText(ctx, `ごちそう こうかちゅう! (×${this.battle.scoutBoost})`, 16, 180, { color: '#ffd94a', font: FONT_SMALL });
+        drawText(ctx, `ごちそう こうかちゅう! (×${this.battle.scoutBoost})`, p ? 10 : 16, p ? 392 : 180, {
+          color: '#ffd94a',
+          font: FONT_SMALL,
+        });
       }
     }
     if (this.phase === 'allyAction') {
       const ally = this.currentAlly();
-      this.actionMenu.draw(ctx, 16, 230, 240, ally ? `${ally.name} は?` : '');
+      this.actionMenu.draw(ctx, p ? 10 : 16, p ? 430 : 230, 240, ally ? `${ally.name} は?` : '');
     }
-    if (this.phase === 'skillPick') this.skillMenu.draw(ctx, 16, 160, 340, 'とくぎ');
-    if (this.phase === 'itemPick') this.itemMenu.draw(ctx, 16, 160, 340, 'どうぐ');
-    if (this.phase === 'targetAlly') this.allyMenu.draw(ctx, 16, 200, 380, 'だれに?');
+    if (this.phase === 'skillPick') this.skillMenu.draw(ctx, p ? 10 : 16, p ? 290 : 160, p ? view.w - 20 : 340, 'とくぎ');
+    if (this.phase === 'itemPick') this.itemMenu.draw(ctx, p ? 10 : 16, p ? 290 : 160, p ? view.w - 20 : 340, 'どうぐ');
+    if (this.phase === 'targetAlly') this.allyMenu.draw(ctx, p ? 10 : 16, p ? 340 : 200, p ? view.w - 20 : 380, 'だれに?');
     if (this.phase === 'targetEnemy') {
-      drawWindow(ctx, 16, 230, 220, 56);
-      drawText(ctx, 'どのてきに?', 36, 247);
+      drawWindow(ctx, p ? 10 : 16, p ? 450 : 230, 220, 56);
+      drawText(ctx, 'どのてきに?', p ? 30 : 36, p ? 467 : 247);
     }
 
     // メッセージ
     if (this.waitingMessage || !this.messages.done) {
-      this.messages.draw(ctx, MSG_X, MSG_Y, MSG_W, MSG_H);
+      const r = msgRect();
+      this.messages.draw(ctx, r.x, r.y, r.w, r.h);
     }
   }
 
@@ -493,11 +498,12 @@ export class BattleScene implements Scene {
     const alive = this.battle.aliveEnemies();
     const scale = this.isBoss ? 9 : 6;
     const size = 16 * scale;
-    const gap = size + 40;
+    const gap = size + (isPortrait() ? 14 : 40);
+    const groundY = isPortrait() ? 390 : 330;
     return alive.map((unit, i) => ({
       unit,
-      x: SCREEN_W / 2 + (i - (alive.length - 1) / 2) * gap - size / 2,
-      y: 300 - size,
+      x: view.w / 2 + (i - (alive.length - 1) / 2) * gap - size / 2,
+      y: groundY - 30 - size,
     }));
   }
 
@@ -528,28 +534,45 @@ export class BattleScene implements Scene {
 
   private drawAllyPanels(ctx: CanvasRenderingContext2D): void {
     const n = this.battle.allies.length;
+    const msg = msgRect();
+    const current = this.phase === 'allyAction' || this.phase === 'skillPick' ? this.currentAlly() : undefined;
+
+    if (isPortrait()) {
+      // 縦持ち: 全幅パネルを縦に積む
+      const w = view.w - 16;
+      const h = 62;
+      for (let i = 0; i < n; i++) {
+        const unit = this.battle.allies[i]!;
+        const x = 8;
+        const y = msg.y - (n - i) * (h + 6);
+        drawWindow(ctx, x, y, w, h);
+        const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
+        drawText(ctx, unit.name, x + 16, y + 8, { color: nameColor, font: FONT_SMALL });
+        drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 8, { align: 'right', font: FONT_SMALL });
+        drawGauge(ctx, x + 16, y + 40, 130, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
+        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 156, y + 32, { font: FONT_SMALL });
+        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 14, y + 32, { align: 'right', font: FONT_SMALL });
+        if (current && current.id === unit.id) drawText(ctx, '▶', x + 2, y + 6, { color: '#ffd94a' });
+      }
+      return;
+    }
+
+    // 横持ち: 3枚を横に並べる
     const w = 300;
     const h = 92;
-    const y = MSG_Y - h - 6;
+    const y = msg.y - h - 6;
     for (let i = 0; i < n; i++) {
       const unit = this.battle.allies[i]!;
       const x = 12 + i * (w + 16);
       drawWindow(ctx, x, y, w, h);
-      const dead = unit.hp <= 0;
-      const nameColor = dead ? '#f05a3d' : '#ffffff';
+      const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
       drawText(ctx, `${unit.name}`, x + 16, y + 12, { color: nameColor, font: FONT_SMALL });
       drawText(ctx, `Lv${unit.level}`, x + w - 16, y + 12, { align: 'right', font: FONT_SMALL });
       drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 16, y + 34, { font: FONT_SMALL });
       drawGauge(ctx, x + 150, y + 38, w - 170, 9, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
       drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + 16, y + 58, { font: FONT_SMALL });
       drawGauge(ctx, x + 150, y + 62, w - 170, 9, unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp, '#4a8ae8');
-      // 行動選択中の味方を示す
-      if (this.phase === 'allyAction' || this.phase === 'skillPick') {
-        const current = this.currentAlly();
-        if (current && current.id === unit.id) {
-          drawText(ctx, '▶', x + 2, y + 10, { color: '#ffd94a' });
-        }
-      }
+      if (current && current.id === unit.id) drawText(ctx, '▶', x + 2, y + 10, { color: '#ffd94a' });
     }
   }
 }

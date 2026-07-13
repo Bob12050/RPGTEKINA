@@ -11,14 +11,12 @@ import { getSpecies } from '../data/monsters';
 import type { EnemySpec } from '../game/battle';
 import { markSeen } from '../game/state';
 import { drawHero, drawMonster, drawGridSprite, HERO_SPRITE, drawTile } from '../ui/sprites';
-import { drawText, drawWindow, FONT_SMALL, MessageBox, SCREEN_H, SCREEN_W } from '../ui/window';
+import { drawText, drawWindow, FONT_SMALL, MessageBox, view, isPortrait } from '../ui/window';
 import { BattleScene } from './battle';
 import { DialogScene } from './dialog';
 import { PauseMenuScene } from './menu';
 
 const TILE = 48;
-const VIEW_W = SCREEN_W / TILE; // 20
-const VIEW_H = SCREEN_H / TILE; // 13
 const MOVE_SPEED = 5.5; // タイル/秒
 
 const DIR_DELTA: Record<Dir, [number, number]> = {
@@ -164,16 +162,20 @@ export class FieldScene implements Scene {
     const py = this.fromY + (state.y - this.fromY) * t;
     const mapW = this.map.tiles[0]!.length;
     const mapH = this.map.tiles.length;
-    const camX = Math.max(0, Math.min(mapW - VIEW_W, px - VIEW_W / 2 + 0.5));
-    const camY = Math.max(0, Math.min(mapH - VIEW_H, py - VIEW_H / 2 + 0.5));
+    // 画面の向きに応じた表示タイル数(縦持ちでは縦長の視界になる)
+    const viewW = view.w / TILE;
+    const viewH = view.h / TILE;
+    // マップが視界より小さい場合は中央寄せ(村を縦画面で見たときなど)
+    const camX = mapW <= viewW ? (mapW - viewW) / 2 : Math.max(0, Math.min(mapW - viewW, px - viewW / 2 + 0.5));
+    const camY = mapH <= viewH ? (mapH - viewH) / 2 : Math.max(0, Math.min(mapH - viewH, py - viewH / 2 + 0.5));
 
     ctx.fillStyle = '#0a0a14';
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    ctx.fillRect(0, 0, view.w, view.h);
 
-    const startX = Math.floor(camX);
-    const startY = Math.floor(camY);
-    for (let y = startY; y <= Math.min(mapH - 1, startY + VIEW_H + 1); y++) {
-      for (let x = startX; x <= Math.min(mapW - 1, startX + VIEW_W + 1); x++) {
+    for (let y = Math.floor(camY); y <= Math.floor(camY + viewH) + 1; y++) {
+      if (y < 0 || y >= mapH) continue;
+      for (let x = Math.floor(camX); x <= Math.floor(camX + viewW) + 1; x++) {
+        if (x < 0 || x >= mapW) continue;
         drawTile(ctx, tileAt(this.map, x, y), (x - camX) * TILE, (y - camY) * TILE, TILE, x, y, this.time);
       }
     }
@@ -182,7 +184,7 @@ export class FieldScene implements Scene {
     for (const npc of this.map.npcs) {
       const sx = (npc.x - camX) * TILE;
       const sy = (npc.y - camY) * TILE;
-      if (sx < -TILE || sx > SCREEN_W || sy < -TILE || sy > SCREEN_H) continue;
+      if (sx < -TILE || sx > view.w || sy < -TILE || sy > view.h) continue;
       if (npc.action === 'boss') {
         const sp = getSpecies('tekina');
         drawMonster(ctx, sp.family, sp.palette, sx, sy + Math.sin(this.time * 2) * 3, 3);
@@ -211,16 +213,19 @@ export class FieldScene implements Scene {
 
     // マップ名
     if (this.mapNameTimer > 0) {
-      drawWindow(ctx, 16, 16, 260, 52);
-      drawText(ctx, this.map.name, 146, 31, { align: 'center' });
+      drawWindow(ctx, 12, 12, 240, 50);
+      drawText(ctx, this.map.name, 132, 26, { align: 'center' });
     }
-    drawText(ctx, 'Z/A:はなす・しらべる  X/B:メニュー', SCREEN_W - 16, 10, {
-      align: 'right',
-      font: FONT_SMALL,
-      color: 'rgba(255,255,255,0.75)',
-    });
+    if (!isPortrait()) {
+      drawText(ctx, 'Z/A:はなす・しらべる  X/B:メニュー', view.w - 16, 10, {
+        align: 'right',
+        font: FONT_SMALL,
+        color: 'rgba(255,255,255,0.75)',
+      });
+    }
 
     // 冒頭メッセージ
-    this.messages.draw(ctx, 60, SCREEN_H - 150, SCREEN_W - 120, 130);
+    const m = isPortrait() ? 10 : 60;
+    this.messages.draw(ctx, m, view.h - 150, view.w - m * 2, 130);
   }
 }
