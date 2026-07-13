@@ -52,6 +52,17 @@ export class Input {
     target.addEventListener('blur', () => this.held.clear());
   }
 
+  /** タッチUIなどからの仮想キー押下(キーボードと同じ扱い) */
+  virtualPress(key: GameKey): void {
+    if (!this.held.has(key)) this.queue.push(key);
+    this.held.add(key);
+  }
+
+  /** 仮想キーを離す */
+  virtualRelease(key: GameKey): void {
+    this.held.delete(key);
+  }
+
   /** キュー先頭の押下イベントを取り出す(なければ null) */
   poll(): GameKey | null {
     return this.queue.shift() ?? null;

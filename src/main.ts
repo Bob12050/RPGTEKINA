@@ -4,6 +4,7 @@
 import type { App } from './core/app';
 import { Input } from './core/input';
 import { SceneManager } from './core/scene';
+import { setupTouchControls } from './ui/touch';
 import { SCREEN_H, SCREEN_W } from './ui/window';
 import { TitleScene } from './scenes/title';
 
@@ -23,6 +24,7 @@ function boot(): void {
 
   const input = new Input();
   input.attach(window);
+  setupTouchControls(input); // スマホならタッチ操作UIを表示
 
   const scenes = new SceneManager();
   const app: App = { input, scenes, state: null };

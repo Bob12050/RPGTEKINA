@@ -214,7 +214,7 @@ export class FieldScene implements Scene {
       drawWindow(ctx, 16, 16, 260, 52);
       drawText(ctx, this.map.name, 146, 31, { align: 'center' });
     }
-    drawText(ctx, 'Z:はなす/しらべる  X:メニュー', SCREEN_W - 16, 10, {
+    drawText(ctx, 'Z/A:はなす・しらべる  X/B:メニュー', SCREEN_W - 16, 10, {
       align: 'right',
       font: FONT_SMALL,
       color: 'rgba(255,255,255,0.75)',

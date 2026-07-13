@@ -84,8 +84,8 @@ export class TitleScene implements Scene {
     drawMonster(ctx, imp.family, imp.palette, SCREEN_W / 2 + 140, 230 + bounce, 5);
 
     this.menu.draw(ctx, SCREEN_W / 2 - 150, 400, 300);
-    drawWindow(ctx, SCREEN_W / 2 - 280, 545, 560, 56);
-    drawText(ctx, '↑↓: えらぶ   Z / Enter: けってい   X / Esc: もどる', SCREEN_W / 2, 562, {
+    drawWindow(ctx, SCREEN_W / 2 - 300, 545, 600, 56);
+    drawText(ctx, '↑↓: えらぶ   Z / A: けってい   X / B: もどる', SCREEN_W / 2, 562, {
       align: 'center',
       font: FONT_SMALL,
     });
