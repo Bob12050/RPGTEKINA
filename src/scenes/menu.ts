@@ -128,14 +128,14 @@ export class PauseMenuScene implements Scene {
   private buildPartyMenu(): void {
     const state = requireState(this.app);
     this.partyMenu.setItems(state.party.map((m) => ({ label: monsterLabel(m), note: monsterNote(m) })));
-    this.partyMenu.cursor = 0;
+    this.partyMenu.reset();
   }
 
   private buildItemMenu(): void {
     const state = requireState(this.app);
     const items = this.itemIds().map((id) => ({ label: getItem(id).name, note: `×${state.items[id]}` }));
     this.itemMenu.setItems(items.length > 0 ? items : [{ label: '(なにも もっていない)', disabled: true }]);
-    this.itemMenu.cursor = 0;
+    this.itemMenu.reset();
   }
 
   private buildTargetMenu(deadOnly: boolean): void {
@@ -147,7 +147,7 @@ export class PauseMenuScene implements Scene {
         disabled: deadOnly ? m.hp > 0 : m.hp <= 0,
       })),
     );
-    this.targetMenu.cursor = 0;
+    this.targetMenu.reset();
   }
 
   private useItem(itemId: string, target: MonsterInstance): void {

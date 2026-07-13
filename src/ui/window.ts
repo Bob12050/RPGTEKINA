@@ -133,6 +133,18 @@ export class Menu {
     this.fixScroll();
   }
 
+  /** カーソルとスクロールを先頭に戻す(リストを作り直したときに使う) */
+  reset(): void {
+    this.cursor = 0;
+    this.scroll = 0;
+  }
+
+  /** カーソルを指定位置へ移動し、スクロールも追従させる */
+  setCursor(index: number): void {
+    this.cursor = Math.max(0, Math.min(index, this.items.length - 1));
+    this.fixScroll();
+  }
+
   /** 戻り値: 'select' | 'cancel' | null */
   handleKey(key: GameKey): 'select' | 'cancel' | null {
     if (this.items.length === 0) {

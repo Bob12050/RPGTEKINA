@@ -54,7 +54,7 @@ export class SynthesisScene implements Scene {
       };
     });
     this.listMenu.setItems(items.length > 0 ? items : [{ label: '(モンスターが いない)', disabled: true }]);
-    this.listMenu.cursor = 0;
+    this.listMenu.reset();
   }
 
   private buildSkillMenu(): void {
@@ -68,6 +68,7 @@ export class SynthesisScene implements Scene {
     }));
     items.push({ label: '>> これで けってい! <<', note: '' });
     this.skillMenu.setItems(items);
+    this.skillMenu.reset();
   }
 
   /** 現在の選択でのプレビュー用の子(状態は変更しない) */
@@ -166,7 +167,7 @@ export class SynthesisScene implements Scene {
         }
         const cursor = this.skillMenu.cursor;
         this.buildSkillMenu();
-        this.skillMenu.cursor = cursor;
+        this.skillMenu.setCursor(cursor);
         break;
       }
       case 'confirm': {

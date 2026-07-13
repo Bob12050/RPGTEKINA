@@ -137,6 +137,39 @@ describe('Battle', () => {
     expect(battle.enemies[1]!.name).toMatch(/B$/);
   });
 
+  it('単体回復は対象が倒れていたら生存者に飛ぶ(MPだけ消費して不発にならない)', () => {
+    setRandomSource(() => 0.5);
+    const healer = createMonster('mandra', 10, { skillIds: ['heal'] });
+    const tank = createMonster('golem', 10);
+    const battle = new Battle([healer, tank], [{ speciesId: 'puni', level: 1 }]);
+    const healerUnit = battle.allies[0]!;
+    const tankUnit = battle.allies[1]!;
+    healerUnit.hp = 1; // 自分が負傷
+    tankUnit.hp = 0; // 対象は死亡
+    const actions = new Map<string, AllyAction>([
+      [healerUnit.id, { kind: 'skill', skillId: 'heal', targetId: tankUnit.id }],
+    ]);
+    const events = battle.executeTurn({ kind: 'fight', actions });
+    // 死んだ対象ではなく、生存中で最もHP割合の低い自分に回復が飛ぶ
+    const healEvent = events.find((e) => e.type === 'hpChange' && e.delta > 0);
+    expect(healEvent).toBeDefined();
+    expect((healEvent as { unitId: string }).unitId).toBe(healerUnit.id);
+  });
+
+  it('単体回復はターゲット未指定(AI)なら最も負傷している味方へ', () => {
+    setRandomSource(() => 0.5);
+    const healer = createMonster('mandra', 10, { skillIds: ['heal'] });
+    const tank = createMonster('golem', 10);
+    const battle = new Battle([healer, tank], [{ speciesId: 'puni', level: 1 }]);
+    const healerUnit = battle.allies[0]!;
+    const tankUnit = battle.allies[1]!;
+    tankUnit.hp = 1; // タンクが瀕死・ヒーラーは満タン
+    const actions = new Map<string, AllyAction>([[healerUnit.id, { kind: 'skill', skillId: 'heal' }]]);
+    const events = battle.executeTurn({ kind: 'fight', actions });
+    const healEvent = events.find((e) => e.type === 'hpChange' && e.delta > 0 && e.unitId === tankUnit.id);
+    expect(healEvent).toBeDefined();
+  });
+
   it('ダメージを受けてもHPは0未満にならない', () => {
     setRandomSource(() => 0.5);
     const ally = createMonster('puni', 1);

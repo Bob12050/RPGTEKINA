@@ -81,6 +81,9 @@ export class FarmScene implements Scene {
           } else if (state.farm.length >= FARM_MAX) {
             this.messages.setPages(['ぼくじょうが いっぱいだ!']);
             this.showingMessage = true;
+          } else if (state.party.filter((p) => p !== m).every((p) => p.hp <= 0)) {
+            this.messages.setPages(['たたかえる なかまが いなくなっちゃうよ!']);
+            this.showingMessage = true;
           } else {
             state.party.splice(state.party.indexOf(m), 1);
             state.farm.push(m);

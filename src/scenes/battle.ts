@@ -106,7 +106,11 @@ export class BattleScene implements Scene {
     switch (this.phase) {
       case 'playback': {
         if (this.waitingMessage) {
-          if ((key === 'confirm' || key === 'cancel') && this.messages.currentPageComplete) {
+          if (key === 'confirm' || key === 'cancel') {
+            if (!this.messages.currentPageComplete) {
+              this.messages.advance(); // タイプ表示中なら即全文表示
+              return;
+            }
             this.waitingMessage = false;
           } else {
             return;
@@ -308,7 +312,7 @@ export class BattleScene implements Scene {
       return { label: s.name, note: s.mpCost > 0 ? `MP${s.mpCost}` : '', disabled: ally.mp < s.mpCost };
     });
     this.skillMenu.setItems(items.length > 0 ? items : [{ label: '(とくぎを おぼえていない)', disabled: true }]);
-    this.skillMenu.cursor = 0;
+    this.skillMenu.reset();
   }
 
   private buildItemMenu(): void {
@@ -316,7 +320,7 @@ export class BattleScene implements Scene {
     const ids = Object.keys(state.items).filter((id) => (state.items[id] ?? 0) > 0);
     const items = ids.map((id) => ({ label: getItem(id).name, note: `×${state.items[id]}` }));
     this.itemMenu.setItems(items.length > 0 ? items : [{ label: '(どうぐを もっていない)', disabled: true }]);
-    this.itemMenu.cursor = 0;
+    this.itemMenu.reset();
   }
 
   private buildAllyMenu(deadOnly = false): void {
@@ -325,7 +329,7 @@ export class BattleScene implements Scene {
       disabled: deadOnly ? a.hp > 0 : a.hp <= 0,
     }));
     this.allyMenu.setItems(items);
-    this.allyMenu.cursor = 0;
+    this.allyMenu.reset();
   }
 
   private runTurn(command: Parameters<Battle['executeTurn']>[0]): void {
@@ -422,7 +426,8 @@ export class BattleScene implements Scene {
 
   private exitBattle(): void {
     const state = requireState(this.app);
-    this.battle.syncBack();
+    // syncBack は queuePostBattle で実行済み。ここで再実行すると
+    // レベルアップ時のHP/MP回復(gainExp)を巻き戻してしまうので呼ばない。
     if (this.result === 'lose') {
       healParty(state);
       state.mapId = START_MAP;

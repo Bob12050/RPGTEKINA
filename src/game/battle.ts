@@ -452,10 +452,22 @@ export class Battle {
         break;
       }
       case 'heal': {
-        const targets =
-          eff.target === 'all'
-            ? [...friends]
-            : [(targetId && this.findUnit(targetId)) || friends[0]!].filter(Boolean) as BattleUnit[];
+        let targets: BattleUnit[];
+        if (eff.target === 'all') {
+          targets = [...friends];
+        } else {
+          // 指定対象が倒れていたら(またはAIで未指定なら)最もHP割合の低い生存者へ
+          const chosen = targetId ? this.findUnit(targetId) : undefined;
+          const t =
+            chosen && chosen.hp > 0
+              ? chosen
+              : [...friends].sort((a, b) => a.hp / a.stats.hp - b.hp / b.stats.hp)[0];
+          targets = t ? [t] : [];
+        }
+        if (targets.every((t) => t.hp <= 0)) {
+          ev.push({ type: 'message', text: 'しかし なにも おこらなかった…。' });
+          break;
+        }
         for (const t of targets) {
           if (t.hp <= 0) continue;
           const amount = Math.floor((eff.power + user.stats.wis * 0.3) * variance(0.1));
@@ -479,10 +491,22 @@ export class Battle {
         break;
       }
       case 'buff': {
-        const targets =
-          eff.target === 'all'
-            ? [...friends]
-            : [(targetId && this.findUnit(targetId)) || friends[0]!].filter(Boolean) as BattleUnit[];
+        let targets: BattleUnit[];
+        if (eff.target === 'all') {
+          targets = [...friends];
+        } else {
+          // 指定対象が倒れていたら(またはAIで未指定なら)強化段階が最も低い生存者へ
+          const chosen = targetId ? this.findUnit(targetId) : undefined;
+          const t =
+            chosen && chosen.hp > 0
+              ? chosen
+              : [...friends].sort((a, b) => a.buffs[eff.stat] - b.buffs[eff.stat])[0];
+          targets = t ? [t] : [];
+        }
+        if (targets.every((t) => t.hp <= 0)) {
+          ev.push({ type: 'message', text: 'しかし なにも おこらなかった…。' });
+          break;
+        }
         for (const t of targets) {
           if (t.hp <= 0) continue;
           t.buffs[eff.stat] = Math.min(3, t.buffs[eff.stat] + eff.stages);
