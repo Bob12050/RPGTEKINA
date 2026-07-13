@@ -1,0 +1,554 @@
+// ============================================================
+// バトルエンジン(純ロジック・UI非依存)
+// コマンドを受け取り、1ターン分の BattleEvent 列を生成する。
+// UI側(scenes/battle.ts)はイベントを順に再生するだけ。
+// ============================================================
+import { chance, randInt, random, variance } from '../core/rng';
+import type { MonsterInstance, SkillDef, Stats } from '../core/types';
+import { getItem } from '../data/items';
+import { getSpecies } from '../data/monsters';
+import { getSkill } from '../data/skills';
+import { expFromEnemy, goldFromEnemy, maxStats, naturalSkillsAt } from './monster';
+import { rollScout, scoutRate } from './scout';
+
+// ---- バトル内ユニット ----
+export interface BattleUnit {
+  id: string;
+  side: 'ally' | 'enemy';
+  name: string;
+  speciesId: string;
+  level: number;
+  stats: Stats; // 最大値スナップショット
+  hp: number;
+  mp: number;
+  skillIds: string[];
+  buffs: { atk: number; def: number; agi: number }; // -3〜+3 段階
+  guarding: boolean;
+  /** 味方のみ: 元の個体(戦闘後にHP/MPを書き戻す) */
+  ref?: MonsterInstance;
+}
+
+export type AllyAction =
+  | { kind: 'attack'; targetId: string }
+  | { kind: 'skill'; skillId: string; targetId?: string }
+  | { kind: 'guard' };
+
+export type PartyCommand =
+  | { kind: 'fight'; actions: Map<string, AllyAction> }
+  | { kind: 'scout'; targetId: string }
+  | { kind: 'item'; itemId: string; targetAllyId?: string }
+  | { kind: 'flee' };
+
+export type BattleEvent =
+  | { type: 'message'; text: string }
+  | { type: 'attackAnim'; unitId: string }
+  | { type: 'hpChange'; unitId: string; delta: number; hpAfter: number }
+  | { type: 'mpChange'; unitId: string; delta: number; mpAfter: number }
+  | { type: 'ko'; unitId: string }
+  | { type: 'scoutAttempt'; rate: number }
+  | { type: 'end'; result: BattleResult };
+
+export type BattleResult = 'win' | 'lose' | 'flee' | 'scouted';
+
+export interface BattleRewards {
+  exp: number;
+  gold: number;
+}
+
+function stageMul(stage: number): number {
+  return 1 + 0.25 * Math.max(-3, Math.min(3, stage));
+}
+
+function effAtk(u: BattleUnit): number {
+  return u.stats.atk * stageMul(u.buffs.atk);
+}
+
+function effDef(u: BattleUnit): number {
+  const guard = u.guarding ? 2 : 1;
+  return u.stats.def * stageMul(u.buffs.def) * guard;
+}
+
+function effAgi(u: BattleUnit): number {
+  return u.stats.agi * stageMul(u.buffs.agi);
+}
+
+let enemySeq = 0;
+
+function makeEnemyUnit(speciesId: string, level: number, suffix: string): BattleUnit {
+  const sp = getSpecies(speciesId);
+  const inst: MonsterInstance = {
+    uid: `enemy-${enemySeq++}`,
+    speciesId,
+    nickname: sp.name,
+    level,
+    exp: 0,
+    plus: 0,
+    bonus: { hp: 0, mp: 0, atk: 0, def: 0, agi: 0, wis: 0 },
+    skillIds: naturalSkillsAt(speciesId, level),
+    hp: 0,
+    mp: 0,
+  };
+  const stats = maxStats(inst);
+  return {
+    id: inst.uid,
+    side: 'enemy',
+    name: sp.name + suffix,
+    speciesId,
+    level,
+    stats,
+    hp: stats.hp,
+    mp: stats.mp,
+    skillIds: inst.skillIds,
+    buffs: { atk: 0, def: 0, agi: 0 },
+    guarding: false,
+  };
+}
+
+function makeAllyUnit(m: MonsterInstance): BattleUnit {
+  const stats = maxStats(m);
+  return {
+    id: m.uid,
+    side: 'ally',
+    name: m.nickname,
+    speciesId: m.speciesId,
+    level: m.level,
+    stats,
+    hp: Math.min(m.hp, stats.hp),
+    mp: Math.min(m.mp, stats.mp),
+    skillIds: [...m.skillIds],
+    buffs: { atk: 0, def: 0, agi: 0 },
+    guarding: false,
+    ref: m,
+  };
+}
+
+export interface EnemySpec {
+  speciesId: string;
+  level: number;
+}
+
+export class Battle {
+  allies: BattleUnit[];
+  enemies: BattleUnit[];
+  isBoss: boolean;
+  result: BattleResult | null = null;
+  rewards: BattleRewards = { exp: 0, gold: 0 };
+  /** ごちそうアイテムによるスカウト倍率(戦闘終了まで持続) */
+  scoutBoost = 1;
+  /** スカウト成功した敵(仲間加入処理はUI側) */
+  scoutedEnemy: BattleUnit | null = null;
+  private fleeAttempts = 0;
+
+  constructor(party: MonsterInstance[], enemySpecs: EnemySpec[], isBoss = false) {
+    this.allies = party.map(makeAllyUnit);
+    // 同種が複数いるときだけ A/B/C を付ける
+    const counts = new Map<string, number>();
+    for (const e of enemySpecs) counts.set(e.speciesId, (counts.get(e.speciesId) ?? 0) + 1);
+    const seen = new Map<string, number>();
+    this.enemies = enemySpecs.map((e) => {
+      const n = seen.get(e.speciesId) ?? 0;
+      seen.set(e.speciesId, n + 1);
+      const suffix = (counts.get(e.speciesId) ?? 1) > 1 ? String.fromCharCode(65 + n) : '';
+      return makeEnemyUnit(e.speciesId, e.level, suffix);
+    });
+    this.isBoss = isBoss;
+  }
+
+  aliveAllies(): BattleUnit[] {
+    return this.allies.filter((u) => u.hp > 0);
+  }
+
+  aliveEnemies(): BattleUnit[] {
+    return this.enemies.filter((u) => u.hp > 0);
+  }
+
+  findUnit(id: string): BattleUnit | undefined {
+    return [...this.allies, ...this.enemies].find((u) => u.id === id);
+  }
+
+  /** 戦闘終了後、味方のHP/MPを元の個体へ書き戻す */
+  syncBack(): void {
+    for (const u of this.allies) {
+      if (u.ref) {
+        u.ref.hp = Math.max(0, u.hp);
+        u.ref.mp = Math.max(0, u.mp);
+      }
+    }
+  }
+
+  /** 1ターン実行してイベント列を返す */
+  executeTurn(command: PartyCommand): BattleEvent[] {
+    const ev: BattleEvent[] = [];
+    if (this.result) return ev;
+
+    switch (command.kind) {
+      case 'scout':
+        this.doScout(ev, command.targetId);
+        if (!this.result) this.enemiesAct(ev);
+        break;
+      case 'item':
+        this.doItem(ev, command.itemId, command.targetAllyId);
+        if (!this.result) this.enemiesAct(ev);
+        break;
+      case 'flee':
+        this.doFlee(ev);
+        if (!this.result) this.enemiesAct(ev);
+        break;
+      case 'fight':
+        this.doFight(ev, command.actions);
+        break;
+    }
+
+    this.checkEnd(ev);
+    // ターン終了時: ぼうぎょ解除
+    for (const u of [...this.allies, ...this.enemies]) u.guarding = false;
+    return ev;
+  }
+
+  // ---- スカウト ----
+  private doScout(ev: BattleEvent[], targetId: string): void {
+    const target = this.findUnit(targetId);
+    if (!target || target.hp <= 0) {
+      ev.push({ type: 'message', text: 'しかし あいては いなかった!' });
+      return;
+    }
+    const atkSum = this.aliveAllies().reduce((s, u) => s + effAtk(u), 0);
+    const rate = scoutRate(
+      atkSum,
+      { speciesId: target.speciesId, maxHp: target.stats.hp, currentHp: target.hp, def: target.stats.def },
+      this.scoutBoost,
+    );
+    ev.push({ type: 'message', text: `みんなは ${target.name}に なかまに なるよう よびかけた!` });
+    if (rate === null) {
+      ev.push({ type: 'message', text: `${target.name}は まったく こちらを みていない! なかまに できそうにない!` });
+      return;
+    }
+    ev.push({ type: 'scoutAttempt', rate });
+    if (rollScout(rate)) {
+      ev.push({ type: 'message', text: `${target.name}は なかまに なりたそうに こちらを みている!` });
+      ev.push({ type: 'message', text: `${target.name}が なかまに なった!` });
+      this.scoutedEnemy = target;
+      target.hp = 0; // 戦闘から離脱(KOイベントは出さない)
+      this.result = 'scouted';
+      ev.push({ type: 'end', result: 'scouted' });
+    } else {
+      ev.push({ type: 'message', text: `${target.name}は そっぽを むいてしまった…。` });
+      this.scoutBoost = 1; // ごちそう効果はスカウト1回で消費
+    }
+  }
+
+  // ---- どうぐ ----
+  private doItem(ev: BattleEvent[], itemId: string, targetAllyId?: string): void {
+    const item = getItem(itemId);
+    const target = targetAllyId ? this.findUnit(targetAllyId) : undefined;
+    switch (item.effect.kind) {
+      case 'heal': {
+        if (!target) return;
+        const amount = Math.floor(item.effect.power * variance(0.1));
+        const healed = Math.min(target.stats.hp - target.hp, amount);
+        target.hp += healed;
+        ev.push({ type: 'message', text: `${item.name}を つかった!` });
+        ev.push({ type: 'hpChange', unitId: target.id, delta: healed, hpAfter: target.hp });
+        ev.push({ type: 'message', text: `${target.name}の HPが ${healed}かいふくした!` });
+        break;
+      }
+      case 'mp': {
+        if (!target) return;
+        const amount = Math.floor(item.effect.power * variance(0.1));
+        const healed = Math.min(target.stats.mp - target.mp, amount);
+        target.mp += healed;
+        ev.push({ type: 'message', text: `${item.name}を つかった!` });
+        ev.push({ type: 'mpChange', unitId: target.id, delta: healed, mpAfter: target.mp });
+        ev.push({ type: 'message', text: `${target.name}の MPが ${healed}かいふくした!` });
+        break;
+      }
+      case 'revive': {
+        if (!target || target.hp > 0) {
+          ev.push({ type: 'message', text: 'しかし なにも おこらなかった…。' });
+          return;
+        }
+        target.hp = Math.max(1, Math.floor(target.stats.hp * item.effect.ratio));
+        ev.push({ type: 'message', text: `${item.name}を つかった!` });
+        ev.push({ type: 'hpChange', unitId: target.id, delta: target.hp, hpAfter: target.hp });
+        ev.push({ type: 'message', text: `${target.name}が いきかえった!` });
+        break;
+      }
+      case 'scoutBoost': {
+        this.scoutBoost = Math.max(this.scoutBoost, item.effect.multiplier);
+        ev.push({ type: 'message', text: `${item.name}を なげあたえた!` });
+        ev.push({ type: 'message', text: 'モンスターたちの めが かがやいている! (スカウトりつ アップ)' });
+        break;
+      }
+    }
+  }
+
+  // ---- にげる ----
+  private doFlee(ev: BattleEvent[]): void {
+    ev.push({ type: 'message', text: 'みんなは にげだした!' });
+    if (this.isBoss) {
+      ev.push({ type: 'message', text: 'しかし まわりこまれてしまった!' });
+      return;
+    }
+    const allyAgi = this.aliveAllies().reduce((s, u) => s + effAgi(u), 0) / Math.max(1, this.aliveAllies().length);
+    const enemyAgi = this.aliveEnemies().reduce((s, u) => s + effAgi(u), 0) / Math.max(1, this.aliveEnemies().length);
+    const p = Math.max(0.3, Math.min(0.95, 0.55 + (allyAgi - enemyAgi) / 150 + this.fleeAttempts * 0.15));
+    this.fleeAttempts += 1;
+    if (chance(p)) {
+      this.result = 'flee';
+      ev.push({ type: 'end', result: 'flee' });
+    } else {
+      ev.push({ type: 'message', text: 'しかし まわりこまれてしまった!' });
+    }
+  }
+
+  // ---- たたかう(全員の行動を速さ順に解決) ----
+  private doFight(ev: BattleEvent[], actions: Map<string, AllyAction>): void {
+    interface Turn {
+      unit: BattleUnit;
+      action: AllyAction | 'enemyAI';
+      initiative: number;
+    }
+    const turns: Turn[] = [];
+    for (const u of this.aliveAllies()) {
+      const a = actions.get(u.id) ?? { kind: 'attack', targetId: this.aliveEnemies()[0]?.id ?? '' };
+      turns.push({ unit: u, action: a, initiative: effAgi(u) * variance(0.2) });
+    }
+    for (const u of this.aliveEnemies()) {
+      turns.push({ unit: u, action: 'enemyAI', initiative: effAgi(u) * variance(0.2) });
+    }
+    turns.sort((a, b) => b.initiative - a.initiative);
+
+    for (const t of turns) {
+      if (this.result) break;
+      if (t.unit.hp <= 0) continue; // 行動前に倒された
+      if (t.action === 'enemyAI') {
+        this.enemyAct(ev, t.unit);
+      } else {
+        this.allyAct(ev, t.unit, t.action);
+      }
+      this.checkEnd(ev);
+    }
+  }
+
+  /** 味方以外の行動なしでの敵行動(スカウト失敗時など) */
+  private enemiesAct(ev: BattleEvent[]): void {
+    for (const e of this.aliveEnemies()) {
+      if (this.result) break;
+      this.enemyAct(ev, e);
+      this.checkEnd(ev);
+    }
+  }
+
+  private allyAct(ev: BattleEvent[], unit: BattleUnit, action: AllyAction): void {
+    switch (action.kind) {
+      case 'guard':
+        unit.guarding = true;
+        ev.push({ type: 'message', text: `${unit.name}は みをまもっている。` });
+        break;
+      case 'attack': {
+        let target = this.findUnit(action.targetId);
+        if (!target || target.hp <= 0) target = this.aliveEnemies()[0];
+        if (!target) return;
+        this.normalAttack(ev, unit, target);
+        break;
+      }
+      case 'skill': {
+        this.useSkill(ev, unit, getSkill(action.skillId), action.targetId);
+        break;
+      }
+    }
+  }
+
+  // ---- 敵AI ----
+  private enemyAct(ev: BattleEvent[], unit: BattleUnit): void {
+    const usable = unit.skillIds
+      .map((id) => getSkill(id))
+      .filter((s) => s.mpCost <= unit.mp)
+      .filter((s) => {
+        // 意味のない行動を除外
+        if (s.effect.kind === 'heal') {
+          return this.aliveEnemies().some((e) => e.hp < e.stats.hp * 0.6);
+        }
+        if (s.effect.kind === 'revive') {
+          return this.enemies.some((e) => e.hp <= 0);
+        }
+        if (s.effect.kind === 'buff') {
+          return this.aliveEnemies().some((e) => e.buffs[(s.effect as { stat: 'atk' | 'def' | 'agi' }).stat] < 2);
+        }
+        if (s.effect.kind === 'debuff') {
+          return this.aliveAllies().some((a) => a.buffs[(s.effect as { stat: 'atk' | 'def' | 'agi' }).stat] > -2);
+        }
+        return true;
+      });
+
+    // 40%で通常攻撃、それ以外でとくぎからランダム
+    const useSkillChance = usable.length > 0 ? 0.6 : 0;
+    if (random() < useSkillChance) {
+      const skill = usable[randInt(0, usable.length - 1)]!;
+      this.useSkill(ev, unit, skill, undefined);
+    } else {
+      const targets = this.aliveAllies();
+      const target = targets[randInt(0, targets.length - 1)];
+      if (target) this.normalAttack(ev, unit, target);
+    }
+  }
+
+  // ---- 通常こうげき ----
+  private normalAttack(ev: BattleEvent[], attacker: BattleUnit, target: BattleUnit): void {
+    ev.push({ type: 'message', text: `${attacker.name}の こうげき!` });
+    ev.push({ type: 'attackAnim', unitId: attacker.id });
+    const crit = chance(1 / 16);
+    let dmg: number;
+    if (crit) {
+      ev.push({ type: 'message', text: 'かいしんの いちげき!!' });
+      dmg = Math.max(1, Math.floor((effAtk(attacker) / 2) * 1.3 * variance(0.1)));
+    } else {
+      dmg = Math.max(1, Math.floor((effAtk(attacker) / 2 - effDef(target) / 4) * variance(0.125)));
+    }
+    this.dealDamage(ev, target, dmg);
+  }
+
+  // ---- とくぎ ----
+  private useSkill(ev: BattleEvent[], user: BattleUnit, skill: SkillDef, targetId?: string): void {
+    if (user.mp < skill.mpCost) {
+      ev.push({ type: 'message', text: `${user.name}は ${skill.name}を つかおうとしたが MPが たりない!` });
+      return;
+    }
+    user.mp -= skill.mpCost;
+    ev.push({ type: 'message', text: `${user.name}は ${skill.name}を つかった!` });
+    if (skill.mpCost > 0) ev.push({ type: 'mpChange', unitId: user.id, delta: -skill.mpCost, mpAfter: user.mp });
+
+    const foes = user.side === 'ally' ? this.aliveEnemies() : this.aliveAllies();
+    const friends = user.side === 'ally' ? this.aliveAllies() : this.aliveEnemies();
+    const eff = skill.effect;
+
+    switch (eff.kind) {
+      case 'attack': {
+        let targets: BattleUnit[];
+        if (eff.target === 'all') {
+          targets = [...foes];
+        } else {
+          const chosen = targetId ? this.findUnit(targetId) : undefined;
+          const t = chosen && chosen.hp > 0 ? chosen : foes[randInt(0, foes.length - 1)];
+          targets = t ? [t] : [];
+        }
+        ev.push({ type: 'attackAnim', unitId: user.id });
+        for (const t of targets) {
+          if (t.hp <= 0) continue;
+          const resist = getSpecies(t.speciesId).resist[eff.element] ?? 1;
+          if (resist === 0) {
+            ev.push({ type: 'message', text: `しかし ${t.name}には きかなかった!` });
+            continue;
+          }
+          let base: number;
+          if (eff.scaling === 'wis') base = eff.power + user.stats.wis * 0.45;
+          else if (eff.scaling === 'atk') base = eff.power + effAtk(user) * 0.5 - effDef(t) * 0.2;
+          else base = eff.power * (1 + user.level / 60);
+          const guardMul = t.guarding ? 0.5 : 1;
+          const dmg = Math.max(1, Math.floor(base * variance(0.15) * resist * guardMul));
+          if (resist > 1) ev.push({ type: 'message', text: `${t.name}の よわてんを ついた!` });
+          this.dealDamage(ev, t, dmg);
+        }
+        break;
+      }
+      case 'heal': {
+        const targets =
+          eff.target === 'all'
+            ? [...friends]
+            : [(targetId && this.findUnit(targetId)) || friends[0]!].filter(Boolean) as BattleUnit[];
+        for (const t of targets) {
+          if (t.hp <= 0) continue;
+          const amount = Math.floor((eff.power + user.stats.wis * 0.3) * variance(0.1));
+          const healed = Math.min(t.stats.hp - t.hp, amount);
+          t.hp += healed;
+          ev.push({ type: 'hpChange', unitId: t.id, delta: healed, hpAfter: t.hp });
+          ev.push({ type: 'message', text: `${t.name}の HPが ${healed}かいふくした!` });
+        }
+        break;
+      }
+      case 'revive': {
+        const pool = user.side === 'ally' ? this.allies : this.enemies;
+        const target = (targetId && pool.find((u) => u.id === targetId)) || pool.find((u) => u.hp <= 0);
+        if (!target || target.hp > 0) {
+          ev.push({ type: 'message', text: 'しかし なにも おこらなかった…。' });
+          break;
+        }
+        target.hp = Math.max(1, Math.floor(target.stats.hp * eff.ratio));
+        ev.push({ type: 'hpChange', unitId: target.id, delta: target.hp, hpAfter: target.hp });
+        ev.push({ type: 'message', text: `${target.name}が いきかえった!` });
+        break;
+      }
+      case 'buff': {
+        const targets =
+          eff.target === 'all'
+            ? [...friends]
+            : [(targetId && this.findUnit(targetId)) || friends[0]!].filter(Boolean) as BattleUnit[];
+        for (const t of targets) {
+          if (t.hp <= 0) continue;
+          t.buffs[eff.stat] = Math.min(3, t.buffs[eff.stat] + eff.stages);
+          ev.push({ type: 'message', text: `${t.name}の ${statLabel(eff.stat)}が あがった!` });
+        }
+        break;
+      }
+      case 'debuff': {
+        const targets =
+          eff.target === 'all'
+            ? [...foes]
+            : (() => {
+                const chosen = targetId ? this.findUnit(targetId) : undefined;
+                const t = chosen && chosen.hp > 0 ? chosen : foes[randInt(0, foes.length - 1)];
+                return t ? [t] : [];
+              })();
+        for (const t of targets) {
+          if (t.hp <= 0) continue;
+          t.buffs[eff.stat] = Math.max(-3, t.buffs[eff.stat] + eff.stages);
+          ev.push({ type: 'message', text: `${t.name}の ${statLabel(eff.stat)}が さがった!` });
+        }
+        break;
+      }
+    }
+  }
+
+  private dealDamage(ev: BattleEvent[], target: BattleUnit, dmg: number): void {
+    target.hp = Math.max(0, target.hp - dmg);
+    ev.push({ type: 'hpChange', unitId: target.id, delta: -dmg, hpAfter: target.hp });
+    ev.push({ type: 'message', text: `${target.name}に ${dmg}の ダメージ!` });
+    if (target.hp <= 0) {
+      ev.push({ type: 'ko', unitId: target.id });
+      ev.push({
+        type: 'message',
+        text: target.side === 'enemy' ? `${target.name}を たおした!` : `${target.name}は ちからつきた…。`,
+      });
+    }
+  }
+
+  private checkEnd(ev: BattleEvent[]): void {
+    if (this.result) return;
+    if (this.aliveEnemies().length === 0) {
+      this.result = 'win';
+      this.rewards = this.computeRewards();
+      ev.push({ type: 'message', text: 'まものたちを やっつけた!' });
+      ev.push({ type: 'end', result: 'win' });
+    } else if (this.aliveAllies().length === 0) {
+      this.result = 'lose';
+      ev.push({ type: 'message', text: 'みんなは ぜんめつしてしまった…。' });
+      ev.push({ type: 'end', result: 'lose' });
+    }
+  }
+
+  private computeRewards(): BattleRewards {
+    let exp = 0;
+    let gold = 0;
+    for (const e of this.enemies) {
+      // スカウトした敵からは経験値・ゴールドは入らない
+      if (this.scoutedEnemy && e.id === this.scoutedEnemy.id) continue;
+      exp += expFromEnemy(e.speciesId, e.level);
+      gold += goldFromEnemy(e.speciesId, e.level);
+    }
+    return { exp, gold };
+  }
+}
+
+function statLabel(stat: 'atk' | 'def' | 'agi'): string {
+  return stat === 'atk' ? 'こうげき力' : stat === 'def' ? 'しゅび力' : 'すばやさ';
+}
