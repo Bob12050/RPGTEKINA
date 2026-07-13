@@ -5,6 +5,13 @@
 ![genre](https://img.shields.io/badge/genre-%E3%83%A2%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%BCRPG-blue)
 ![tech](https://img.shields.io/badge/tech-TypeScript%20%2B%20Vite%20%2B%20Canvas-3178c6)
 
+## ▶ ブラウザで遊ぶ
+
+**https://bob12050.github.io/RPGTEKINA/**
+
+> 初回のみ: リポジトリの **Settings → Pages → Source: Deploy from a branch → Branch: `gh-pages` / `(root)` → Save** で公開を有効化してください。
+> 以降はブランチにプッシュするたび、GitHub Actions が自動でビルドして `gh-pages` に反映します。
+
 ## 遊び方
 
 ```bash
