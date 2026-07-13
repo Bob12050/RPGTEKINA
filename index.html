@@ -2,7 +2,14 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0a0a14" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐉</text></svg>"
@@ -16,6 +23,11 @@
         background: #0a0a14;
         height: 100%;
         overflow: hidden;
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
       }
       #game-root {
         display: flex;
@@ -23,15 +35,23 @@
         justify-content: center;
         height: 100%;
       }
+      /* 縦持ちのスマホでは画面上部に寄せて、下半分をタッチ操作用に空ける */
+      @media (orientation: portrait) and (pointer: coarse) {
+        #game-root {
+          align-items: flex-start;
+          padding-top: env(safe-area-inset-top, 0);
+        }
+      }
       canvas {
         image-rendering: pixelated;
         max-width: 100vw;
         max-height: 100vh;
         aspect-ratio: 960 / 624;
         outline: none;
+        touch-action: none;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-B6KYb2qT.js"></script>
+    <script type="module" crossorigin src="./assets/index-Dwxi_dnD.js"></script>
   </head>
   <body>
     <div id="game-root"></div>
