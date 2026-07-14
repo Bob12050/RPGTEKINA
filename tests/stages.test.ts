@@ -1,6 +1,6 @@
 // エリア/クエスト(ノマダン式2階層)の整合性 + 解放ロジックの検証
 import { describe, expect, it } from 'vitest';
-import { hasSpecies } from '../src/data/monsters';
+import { getSpecies, hasSpecies } from '../src/data/monsters';
 import { getItem } from '../src/data/items';
 import {
   AREAS,
@@ -12,6 +12,7 @@ import {
   isAreaUnlocked,
   isStageUnlocked,
   questsOf,
+  repeatGold,
   STAGES,
 } from '../src/data/stages';
 
@@ -110,5 +111,43 @@ describe('エリア/クエストデータ', () => {
   it('hasStage が正しく判定する', () => {
     expect(hasStage('plains-1')).toBe(true);
     expect(hasStage('plains')).toBe(false); // 旧IDはもう存在しない
+  });
+
+  it('周回ドロップのデータが正しい', () => {
+    for (const s of STAGES) {
+      for (const d of s.drops ?? []) {
+        expect(() => getItem(d.itemId), `${s.id} の ${d.itemId}`).not.toThrow();
+        expect(d.chance).toBeGreaterThan(0);
+        expect(d.chance).toBeLessThanOrEqual(1);
+        expect(d.count).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('モンスタードロップは実在し、配合限定種(scout:0)を配らない', () => {
+    for (const s of STAGES) {
+      const md = s.monsterDrop;
+      if (!md) continue;
+      expect(hasSpecies(md.speciesId), `${s.id} の ${md.speciesId}`).toBe(true);
+      expect(getSpecies(md.speciesId).scoutDifficulty, `${s.id} の ${md.speciesId} は配合限定`).toBeGreaterThan(0);
+      expect(md.chance).toBeGreaterThan(0);
+      expect(md.chance).toBeLessThanOrEqual(1);
+      expect(md.level).toBeGreaterThanOrEqual(1);
+      expect(md.level).toBeLessThanOrEqual(50);
+    }
+  });
+
+  it('周回ボーナスは正で初回報酬より少ない', () => {
+    for (const s of STAGES) {
+      const g = repeatGold(s);
+      expect(g).toBeGreaterThan(0);
+      expect(g).toBeLessThan(s.rewardGold + 1);
+    }
+  });
+
+  it('エリアの代表モンスターが実在する', () => {
+    for (const a of AREAS) {
+      expect(hasSpecies(a.iconSpecies), a.id).toBe(true);
+    }
   });
 });

@@ -6,11 +6,13 @@
 // ============================================================
 import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
+import { chance } from '../core/rng';
 import { getItem } from '../data/items';
-import { getStage } from '../data/stages';
+import { getSpecies } from '../data/monsters';
+import { getStage, repeatGold } from '../data/stages';
 import type { BattleResult, EnemySpec } from '../game/battle';
-import { maxStats } from '../game/monster';
-import { addItem, healParty, markStageCleared } from '../game/state';
+import { createMonster, maxStats } from '../game/monster';
+import { addItem, addMonster, healParty, markScouted, markStageCleared } from '../game/state';
 import { drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, isPortrait, MessageBox, view } from '../ui/window';
 import { BattleScene } from './battle';
 
@@ -63,6 +65,7 @@ export class StageScene implements Scene {
     const stage = getStage(this.stageId);
     const firstClear = markStageCleared(state, this.stageId);
     const pages = [`${stage.name}を クリア!`];
+
     if (firstClear) {
       state.gold += stage.rewardGold;
       pages.push(`ほうしゅう ${stage.rewardGold}ゴールドを てにいれた!`);
@@ -71,8 +74,35 @@ export class StageScene implements Scene {
         pages.push(`${getItem(r.itemId).name}を ${r.count}こ てにいれた!`);
       }
     } else {
-      pages.push('(クリアずみ ステージ)');
+      // 周回ボーナス(毎回もらえる)
+      const bonus = repeatGold(stage);
+      state.gold += bonus;
+      pages.push(`しゅうかいボーナス ${bonus}ゴールド!`);
     }
+
+    // 周回ドロップ(毎回抽選)
+    for (const drop of stage.drops ?? []) {
+      if (chance(drop.chance)) {
+        addItem(state, drop.itemId, drop.count);
+        pages.push(`ドロップ! ${getItem(drop.itemId).name} ×${drop.count}`);
+      }
+    }
+
+    // モンスタードロップ(毎回抽選・モンスト式)
+    const md = stage.monsterDrop;
+    if (md && chance(md.chance)) {
+      const sp = getSpecies(md.speciesId);
+      const joined = createMonster(md.speciesId, md.level);
+      markScouted(state, md.speciesId);
+      const where = addMonster(state, joined);
+      if (where === 'full') {
+        pages.push(`おや?! ${sp.name}が ついてきたが ぼくじょうが いっぱいだった…。`);
+      } else {
+        pages.push(`おや?! ${sp.name}が なかまに なりたそうに ついてきた!`);
+        pages.push(where === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ぼくじょうへ!`);
+      }
+    }
+
     this.messages.setPages(pages);
   }
 
