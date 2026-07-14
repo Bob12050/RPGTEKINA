@@ -47,7 +47,7 @@ export class StageSelectScene implements Scene {
         const unlocked = isStageUnlocked(s, state.clearedStages);
         const cleared = state.clearedStages.includes(s.id);
         return {
-          label: `${i + 1}. ${unlocked ? s.name : '？？？'}`,
+          label: `${i + 1}. ${unlocked ? `${s.boss ? '👑 ' : ''}${s.name}` : '？？？'}`,
           note: !unlocked ? '🔒' : cleared ? 'クリア' : `Lv${s.recLevel}`,
           disabled: !unlocked,
         };
@@ -130,10 +130,13 @@ export class StageSelectScene implements Scene {
     if (quest && isStageUnlocked(quest, state.clearedStages)) {
       const dy = view.h - (p ? 130 : 130);
       drawWindow(ctx, 12, dy, view.w - 24, p ? 116 : 110);
-      drawText(ctx, `WAVE ${quest.waves.length} + ボス  /  すいしょうLv${quest.recLevel}`, 32, dy + 16, {
-        font: FONT_SMALL,
-        color: '#ccccee',
-      });
+      drawText(
+        ctx,
+        `${quest.boss ? '👑 ボスクエスト' : `てき ${quest.enemies.length}たい`}  /  すいしょうLv${quest.recLevel}`,
+        32,
+        dy + 16,
+        { font: FONT_SMALL, color: quest.boss ? '#f0a05a' : '#ccccee' },
+      );
       // ドロップ情報(モンスタードロップがあれば見せてあげる)
       if (quest.monsterDrops && quest.monsterDrops.length > 0) {
         const names = quest.monsterDrops

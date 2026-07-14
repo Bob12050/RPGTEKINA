@@ -29,16 +29,35 @@ describe('エリア/クエストデータ', () => {
     for (const a of AREAS) expect(questsOf(a.id).length, a.id).toBeGreaterThan(0);
   });
 
-  it('全クエストの敵・ボスの種族が存在する', () => {
+  it('全クエストに敵がいて、種族・レベルが正しい', () => {
     for (const s of STAGES) {
-      for (const wave of [...s.waves, s.boss]) {
-        expect(wave.length, `${s.id} の空のWAVE`).toBeGreaterThan(0);
-        for (const e of wave) {
-          expect(hasSpecies(e.speciesId), `${s.id} の ${e.speciesId}`).toBe(true);
-          expect(e.level).toBeGreaterThanOrEqual(1);
-          expect(e.level).toBeLessThanOrEqual(50);
+      expect(s.enemies.length, `${s.id} に敵がいない`).toBeGreaterThan(0);
+      expect(s.enemies.length, `${s.id} の敵が多すぎ(画面に収まらない)`).toBeLessThanOrEqual(4);
+      for (const e of s.enemies) {
+        expect(hasSpecies(e.speciesId), `${s.id} の ${e.speciesId}`).toBe(true);
+        expect(e.level).toBeGreaterThanOrEqual(1);
+        expect(e.level).toBeLessThanOrEqual(50);
+      }
+    }
+  });
+
+  it('各エリアの最後のクエストがボス戦になっている', () => {
+    for (const a of AREAS) {
+      const quests = questsOf(a.id);
+      const last = quests[quests.length - 1]!;
+      expect(last.boss, `${a.id} の最終クエスト ${last.id}`).toBe(true);
+      // 通常エリアの途中のクエストはボスではない(しれんは全部ボスでOK)
+      if (!a.postgame) {
+        for (const s of quests.slice(0, -1)) {
+          expect(s.boss ?? false, `${s.id} は途中なのにボス`).toBe(false);
         }
       }
+    }
+  });
+
+  it('ボスクエストの敵は少数精鋭(大きく描くため2体まで)', () => {
+    for (const s of STAGES) {
+      if (s.boss) expect(s.enemies.length, s.id).toBeLessThanOrEqual(2);
     }
   });
 

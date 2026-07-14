@@ -1,8 +1,7 @@
 // ============================================================
 // ステージ進行シーン
-//   ステージ全体を「1つのシームレスなバトル」として実行する。
-//   敵を全滅させると次のWAVEがそのまま流れ込み(小休止つき)、
-//   最後のWAVEがボス。幕間画面はもうない。
+//   1クエスト = 1回の戦闘(敵は固定編成)。
+//   エリア最後のクエストはボス戦(強演出・逃走不可)。
 // ============================================================
 import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
@@ -32,15 +31,13 @@ export class StageScene implements Scene {
     this.app.input.flush();
   }
 
-  /** ステージ開始: 全WAVE+ボスをひとつのバトルとして起動する */
+  /** ステージ開始: 固定編成との1回きりのバトルを起動する */
   private startStage(): void {
     const stage = getStage(this.stageId);
-    const waves: EnemySpec[][] = [...stage.waves, stage.boss].map((wave) =>
-      wave.map((e) => ({ speciesId: e.speciesId, level: e.level })),
-    );
+    const enemies: EnemySpec[] = stage.enemies.map((e) => ({ speciesId: e.speciesId, level: e.level }));
     this.app.scenes.push(
-      new BattleScene(this.app, waves, {
-        bossFinalWave: true,
+      new BattleScene(this.app, [enemies], {
+        bossFinalWave: stage.boss ?? false,
         onComplete: (r) => this.onBattleDone(r),
       }),
     );
@@ -149,13 +146,21 @@ export class StageScene implements Scene {
 
     if (this.phase === 'intro') {
       drawText(ctx, stage.name, cx, p ? 70 : 90, { align: 'center', color: '#ffd94a' });
-      drawText(ctx, `WAVE ${stage.waves.length} + ボス (れんせん)`, cx, p ? 110 : 140, { align: 'center' });
+      drawText(ctx, stage.boss ? 'ボスバトル!!' : 'モンスターとの たたかい', cx, p ? 110 : 140, {
+        align: 'center',
+        color: stage.boss ? '#f0823d' : '#ffffff',
+      });
       drawText(ctx, `すいしょうレベル ${stage.recLevel}`, cx, p ? 150 : 180, {
         align: 'center',
         font: FONT_SMALL,
         color: '#aaaacc',
       });
-      drawText(ctx, 'WAVEの あいまに HP/MPが すこし かいふくする', cx, p ? 178 : 208, {
+      // 敵の顔ぶれ(未遭遇は？？？)
+      const state = requireState(this.app);
+      const names = stage.enemies
+        .map((e) => (state.seenSpecies.includes(e.speciesId) ? getSpecies(e.speciesId).name : '？？？'))
+        .join(' / ');
+      drawText(ctx, `てき: ${names}`, cx, p ? 178 : 208, {
         align: 'center',
         font: FONT_SMALL,
         color: '#8fd44a',

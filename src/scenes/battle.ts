@@ -437,8 +437,8 @@ export class BattleScene implements Scene {
     ctx.ellipse(view.w / 2, groundY, Math.min(380, view.w * 0.44), 70, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // WAVE表示(連戦のときだけ)
-    if (this.battle.waveCount > 1) {
+    // WAVE表示(連戦またはボス戦のとき)
+    if (this.battle.waveCount > 1 || this.battle.isBossWave()) {
       const label = this.battle.isBossWave() ? 'BOSS' : `WAVE ${this.battle.waveIndex + 1}/${this.battle.waveCount}`;
       drawText(ctx, label, view.w - 14, 10, {
         align: 'right',
