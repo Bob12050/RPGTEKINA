@@ -63,15 +63,27 @@ describe('配合限定モンスター', () => {
     }
   });
 
-  it('追加した14種の配合限定モンスターが すべて存在する', () => {
-    const ids = [
-      'caitsith', 'basilisk', 'pegasus', 'chimera', 'hydra', 'griffin', 'sphinx',
-      'valkyrie', 'metaldra', 'bahamut', 'leviathan', 'behemoth', 'seraphim', 'metalking',
-    ];
-    for (const id of ids) {
+  it('scout:0 の種族(tekina除く)は すべて 特殊レシピの子である', () => {
+    // tekina はボス。それ以外の配合限定種は必ずレシピから作れる
+    const recipeChildren = new Set(SPECIAL_RECIPES.map((r) => r.child));
+    for (const sp of synthesisOnly) {
+      if (sp.id === 'tekina') continue;
+      expect(recipeChildren.has(sp.id), `${sp.name}(${sp.id}) を生むレシピがない`).toBe(true);
+    }
+  });
+
+  it('隠し究極モンスター(神クラス)がSランク配合種から作れる', () => {
+    const gods = ['odin', 'vritra', 'gaia', 'omega'];
+    for (const id of gods) {
       const sp = getSpecies(id);
-      expect(sp.scoutDifficulty, `${id} は scout:0 であるべき`).toBe(0);
-      expect(SPECIAL_RECIPES.some((r) => r.child === id), `${id} のレシピがない`).toBe(true);
+      expect(sp.rank).toBe('S');
+      expect(sp.scoutDifficulty).toBe(0);
+      const recipe = SPECIAL_RECIPES.find((r) => r.child === id);
+      expect(recipe, `${id} のレシピがない`).toBeDefined();
+      // 親がどちらも S ランクの配合限定種であること
+      for (const pid of recipe!.parents) {
+        expect(getSpecies(pid).rank, `${id} の親 ${pid}`).toBe('S');
+      }
     }
   });
 });

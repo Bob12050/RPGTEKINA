@@ -10,7 +10,7 @@ import { getSkill } from '../data/skills';
 import { getSpecies } from '../data/monsters';
 import { SPECIAL_RECIPES } from '../data/synthesis';
 import { maxStats } from '../game/monster';
-import { canSynthesize, inheritableSkills, MAX_INHERIT, performSynthesis } from '../game/synthesis';
+import { canSynthesize, inheritableSkills, MAX_INHERIT, performSynthesis, synthesisAffinity } from '../game/synthesis';
 import { addMonster, removeMonster } from '../game/state';
 import { monsterLabel, speciesInfo } from '../ui/format';
 import { drawMonster } from '../ui/sprites';
@@ -189,7 +189,8 @@ export class SynthesisScene implements Scene {
           `${this.parentA.nickname}と ${this.parentB.nickname}は ひかりに つつまれた…!`,
         ];
         if (result.wasSpecial) pages.push('こ… これは とくしゅはいごう だ!!');
-        pages.push(`${result.species.name}が うまれた!`);
+        else if (result.sameSpecies) pages.push('どうしゅ配合! プラスちが おおく のった!');
+        pages.push(`${result.species.name} +${result.child.plus}が うまれた!`);
         pages.push(
           where === 'party'
             ? `${result.species.name}は パーティに くわわった!`
@@ -345,6 +346,15 @@ export class SynthesisScene implements Scene {
     const child = this.previewChild();
     drawWindow(ctx, x, y, w, 180);
     drawText(ctx, '▼ うまれる モンスター', x + 20, y + 14, { font: FONT_SMALL, color: '#8fd44a' });
+    // 相性バッジ(とくしゅ配合 / どうしゅ配合ボーナス)
+    if (this.parentA && this.parentB) {
+      const aff = synthesisAffinity(this.parentA, this.parentB);
+      if (aff === 'special') {
+        drawText(ctx, '★とくしゅ配合★', x + w - 20, y + 14, { align: 'right', font: FONT_SMALL, color: '#ffd94a' });
+      } else if (aff === 'sameSpecies') {
+        drawText(ctx, '◆どうしゅ配合◆', x + w - 20, y + 14, { align: 'right', font: FONT_SMALL, color: '#8fd4ff' });
+      }
+    }
     if (!child) return;
     const sp = getSpecies(child.speciesId);
     const ms = maxStats(child);

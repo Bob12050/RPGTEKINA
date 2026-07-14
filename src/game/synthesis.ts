@@ -58,10 +58,23 @@ export function inheritableSkills(a: MonsterInstance, b: MonsterInstance, childS
 
 export const MAX_INHERIT = 3;
 
+/** 配合の相性(プレビュー・演出用) */
+export type Affinity = 'special' | 'sameSpecies' | 'normal';
+
+export function synthesisAffinity(a: MonsterInstance, b: MonsterInstance): Affinity {
+  if (findSpecialRecipe(a.speciesId, b.speciesId)) return 'special';
+  if (a.speciesId === b.speciesId) return 'sameSpecies';
+  return 'normal';
+}
+
 export interface SynthesisResult {
   child: MonsterInstance;
   species: SpeciesDef;
   wasSpecial: boolean;
+  /** 同種配合ボーナスが乗ったか */
+  sameSpecies: boolean;
+  /** 子に乗ったプラス値の増分 */
+  plusGain: number;
 }
 
 /**
@@ -79,22 +92,29 @@ export function performSynthesis(
   const species = previewChildSpecies(a, b);
   const wasSpecial = findSpecialRecipe(a.speciesId, b.speciesId) !== undefined;
 
+  // 同種配合ボーナス: おなじ種族どうしを かけあわせると
+  // プラス値が おおく のり、ステータスボーナスも 手あつくなる(厳選むけ)
+  const sameSpecies = a.speciesId === b.speciesId;
+  const bonusDivisor = sameSpecies ? 15 : 20;
+  const plusIncrement = sameSpecies ? 3 : 1;
+
   const msA = maxStats(a);
   const msB = maxStats(b);
   const bonus: Stats = emptyStats();
   for (const k of STAT_KEYS) {
-    bonus[k] = Math.min(BONUS_CAP, Math.floor((msA[k] + msB[k]) / 20));
+    bonus[k] = Math.min(BONUS_CAP, Math.floor((msA[k] + msB[k]) / bonusDivisor));
   }
 
   const allowed = new Set(inheritableSkills(a, b, species.id));
   const inherited = [...new Set(inheritSkillIds)].filter((id) => allowed.has(id)).slice(0, MAX_INHERIT);
   const skillIds = [...new Set([...naturalSkillsAt(species.id, 1), ...inherited])].slice(0, MAX_SKILLS);
 
+  const newPlus = Math.min(99, a.plus + b.plus + plusIncrement);
   const child = createMonster(species.id, 1, {
-    plus: Math.min(99, a.plus + b.plus + 1),
+    plus: newPlus,
     bonus,
     skillIds,
   });
 
-  return { child, species, wasSpecial };
+  return { child, species, wasSpecial, sameSpecies, plusGain: newPlus - Math.max(a.plus, b.plus) };
 }

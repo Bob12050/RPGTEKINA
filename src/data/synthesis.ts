@@ -109,6 +109,12 @@ export const SPECIAL_RECIPES: SpecialRecipe[] = [
   { parents: ['chimera', 'grizzly'], child: 'behemoth', hint: 'つぎはぎの まじゅうと ひぐま、だいちを ゆるがす きょじゅう。' },
   { parents: ['valkyrie', 'griffin'], child: 'seraphim', hint: 'せんの おとめと れいじゅう、さいこういの だいてんし。' },
   { parents: ['metaldra', 'diamondgolem'], child: 'metalking', hint: 'こうてつりゅうと ダイヤの きょじん、きんぞくの おう。' },
+
+  // ---- 隠し究極モンスター(神クラス・Sランク配合種どうし) ----
+  { parents: ['seraphim', 'luminas'], child: 'odin', hint: 'だいてんしと せいれいおう… ふたつの ひかりが かみを うむ。' },
+  { parents: ['bahamut', 'leviathan'], child: 'vritra', hint: 'りゅうおうと かいりゅう、ふたつの りゅうしんの ゆうごう。' },
+  { parents: ['behemoth', 'fenrir'], child: 'gaia', hint: 'きょじゅうと しんわの おおかみ、だいちの けしん。' },
+  { parents: ['metalking', 'diamondgolem'], child: 'omega', hint: 'きんぞくの おうと ダイヤの きょじん、きゅうきょくの へいき。' },
 ];
 
 /** 特殊レシピ検索(順不同マッチ) */
@@ -117,4 +123,9 @@ export function findSpecialRecipe(speciesA: string, speciesB: string): SpecialRe
     const [p1, p2] = r.parents;
     return (p1 === speciesA && p2 === speciesB) || (p1 === speciesB && p2 === speciesA);
   });
+}
+
+/** ずかんの逆引き用: その種族を子として生む特殊レシピ一覧 */
+export function recipesForChild(childId: string): SpecialRecipe[] {
+  return SPECIAL_RECIPES.filter((r) => r.child === childId);
 }

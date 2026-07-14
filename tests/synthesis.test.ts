@@ -8,6 +8,7 @@ import {
   MAX_INHERIT,
   performSynthesis,
   previewChildSpecies,
+  synthesisAffinity,
 } from '../src/game/synthesis';
 
 describe('canSynthesize', () => {
@@ -116,6 +117,48 @@ describe('performSynthesis', () => {
   });
 });
 
+describe('同種配合ボーナス(厳選)', () => {
+  it('同種配合はプラス値が多く乗る(+3)', () => {
+    // 通常配合になる同種の組み合わせ(wolf×wolf → beast系)
+    const a = createMonster('wolf', 15, { plus: 1 });
+    const b = createMonster('wolf', 15, { plus: 2 });
+    const result = performSynthesis(a, b, []);
+    expect(result.sameSpecies).toBe(true);
+    expect(result.child.plus).toBe(1 + 2 + 3); // 6
+  });
+
+  it('別種配合はプラス値が+1のまま', () => {
+    const a = createMonster('wolf', 15, { plus: 1 });
+    const b = createMonster('rabbit', 15, { plus: 2 });
+    const result = performSynthesis(a, b, []);
+    expect(result.sameSpecies).toBe(false);
+    expect(result.child.plus).toBe(1 + 2 + 1); // 4
+  });
+
+  it('同種配合はステータスボーナスが別種より手厚い', () => {
+    const same = performSynthesis(createMonster('grizzly', 30), createMonster('grizzly', 30), []);
+    // 同ステータス基準で別種比較するため、片方だけ種を変えた対照
+    const diff = performSynthesis(createMonster('grizzly', 30), createMonster('sabertiger', 30), []);
+    // 同種のほうが bonus divisor が小さい(15 vs 20)ぶん多く乗る
+    expect(same.child.bonus.hp).toBeGreaterThan(0);
+    expect(diff.child.bonus.hp).toBeGreaterThan(0);
+    // grizzly同士とgrizzly×sabertigerでhp基礎が近いため、同種のほうが概ね大きい
+    expect(same.child.bonus.atk).toBeGreaterThanOrEqual(diff.child.bonus.atk);
+  });
+});
+
+describe('配合の相性判定', () => {
+  it('特殊レシピは special', () => {
+    expect(synthesisAffinity(createMonster('flamedrake', 20), createMonster('frostdragon', 20))).toBe('special');
+  });
+  it('同種は sameSpecies', () => {
+    expect(synthesisAffinity(createMonster('wolf', 20), createMonster('wolf', 20))).toBe('sameSpecies');
+  });
+  it('それ以外は normal', () => {
+    expect(synthesisAffinity(createMonster('wolf', 20), createMonster('rabbit', 20))).toBe('normal');
+  });
+});
+
 describe('レシピ連鎖', () => {
   it('最終レシピまで到達できる(グランドラゴン×デモンロード→テキーナ)', () => {
     const a = createMonster('grandragon', 30);
@@ -123,5 +166,13 @@ describe('レシピ連鎖', () => {
     const { child } = performSynthesis(a, b, []);
     expect(child.speciesId).toBe('tekina');
     expect(getSpecies(child.speciesId).rank).toBe('S');
+  });
+
+  it('隠し究極モンスターまで到達できる(バハムート×レヴィアタン→ヴリトラ)', () => {
+    const a = createMonster('bahamut', 40);
+    const b = createMonster('leviathan', 40);
+    const { child, wasSpecial } = performSynthesis(a, b, []);
+    expect(child.speciesId).toBe('vritra');
+    expect(wasSpecial).toBe(true);
   });
 });

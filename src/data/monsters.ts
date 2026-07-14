@@ -601,6 +601,48 @@ export const SPECIES: SpeciesDef[] = [
     palette: ['#c9ced8', '#7a8394', '#f2f5fa'],
     desc: 'きんぞくの モンスターたちの おうさま。おうかんと たてに つつまれた てっぺきの まもり。',
   }),
+
+  // ============================================================
+  // 隠し究極モンスター(神クラス)
+  //   Sランクの配合限定種どうしからのみ生まれる最深層。ゲーム最強格。
+  //   到達には おおくの 多段配合が ひつよう(かくれレシピ)
+  // ============================================================
+  species({
+    id: 'odin', name: 'しんおうオーディン', family: 'mystic', rank: 'S',
+    base: [230, 72, 66, 56, 58, 70], growth: [19, 5.5, 6.5, 5.5, 5.8, 6.8],
+    learnset: [[1, 'gigavolt'], [12, 'healall'], [24, 'darknebula'], [36, 'revive']],
+    scout: 0, exp: 1400, gold: 900,
+    resist: { holy: 0, dark: 0.5, thunder: 0.5, ice: 0.5 },
+    palette: ['#f0e6c2', '#b59a4a', '#7ac2ff'],
+    desc: 'かみがみを したがえる てんくうの おう。かために せかいの すべてが うつる という。',
+  }),
+  species({
+    id: 'vritra', name: 'りゅうしんヴリトラ', family: 'dragon', rank: 'S',
+    base: [255, 60, 74, 62, 50, 52], growth: [20, 4.8, 7.2, 6.2, 5.0, 5.5],
+    learnset: [[1, 'inferno'], [12, 'whiteout'], [24, 'gigavolt'], [36, 'scorch']],
+    scout: 0, exp: 1400, gold: 900,
+    resist: { fire: 0.5, ice: 0.5, thunder: 0.5, dark: 0.5 },
+    palette: ['#6b2ab0', '#3a1266', '#f05a3d'],
+    desc: 'てんちそうぞうの ときから いきる りゅうの かみ。ひとふりで やまを けずる。',
+  }),
+  species({
+    id: 'gaia', name: 'だいちしんガイア', family: 'beast', rank: 'S',
+    base: [275, 45, 78, 64, 46, 42], growth: [21, 3.5, 7.4, 6.4, 4.6, 4.2],
+    learnset: [[1, 'boulder'], [12, 'tempest'], [24, 'healall'], [36, 'scorch']],
+    scout: 0, exp: 1400, gold: 900,
+    resist: { wind: 0.5, ice: 0.5, fire: 0.5 },
+    palette: ['#4a8c3d', '#2a5a22', '#e8b93d'],
+    desc: 'だいちそのものが いしを もった きょじゅう。その こどうは せかいの みゃくどう。',
+  }),
+  species({
+    id: 'omega', name: 'きゅうきょくオメガ', family: 'material', rank: 'S',
+    base: [225, 40, 68, 90, 30, 42], growth: [18, 3.0, 6.6, 8.4, 3.2, 4.0],
+    learnset: [[1, 'gigavolt'], [12, 'boulder'], [24, 'guardsong'], [36, 'whiteout']],
+    scout: 0, exp: 1600, gold: 1000,
+    resist: { fire: 0.5, ice: 0.5, thunder: 0.5, wind: 0.5, dark: 0.5, holy: 0.5 },
+    palette: ['#d8e0ea', '#8a95a8', '#6ee7ff'],
+    desc: 'こだいぶんめいが のこした きゅうきょくの へいき。すべてを むこうかする てっぺきの よろい。',
+  }),
 ];
 
 const speciesMap = new Map(SPECIES.map((s) => [s.id, s]));
