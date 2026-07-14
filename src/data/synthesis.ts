@@ -89,6 +89,26 @@ export const SPECIAL_RECIPES: SpecialRecipe[] = [
   { parents: ['flamedrake', 'eldertreant'], child: 'phoenix', hint: 'ほのおの りゅうと せんねんの たいぼくから うまれる きせき。' },
   { parents: ['phoenix', 'unicorn'], child: 'luminas', hint: 'れいちょうと いっかくじゅう、ふたつの せいなる ひかり。' },
   { parents: ['grandragon', 'demonlord'], child: 'tekina', hint: 'りゅうの おうと まぞくの おう…きんだんの はいごう。' },
+
+  // ---- 配合限定モンスター(B) ----
+  { parents: ['fangwolf', 'imp'], child: 'caitsith', hint: 'キバの オオカミと いたずらな こあくま… ふしぎな ねこ?' },
+  { parents: ['gargoyle', 'ghoul'], child: 'basilisk', hint: 'いしの まものと くさった しかばね、まがまがしい へびに。' },
+  { parents: ['sabertiger', 'dryad'], child: 'pegasus', hint: 'けものの おうと もりの せいれい、てんくうを かける うま。' },
+
+  // ---- 配合限定モンスター(A) ----
+  { parents: ['basilisk', 'cerberus'], child: 'chimera', hint: 'まがんの へびと じごくの けん、つぎはぎの まじゅう。' },
+  { parents: ['basilisk', 'wyvern'], child: 'hydra', hint: 'まがんの へびと よくりゅうから きゅうつの くびが。' },
+  { parents: ['pegasus', 'sabertiger'], child: 'griffin', hint: 'てんばと ししの ゆうごう、りょうよくの れいじゅう。' },
+  { parents: ['pegasus', 'gargoyle'], child: 'sphinx', hint: 'てんばと せきぞうの まもの、なぞかけの しんじゅう。' },
+  { parents: ['pegasus', 'unicorn'], child: 'valkyrie', hint: 'てんばと いっかくじゅう… せんの おとめが まいおりる。' },
+  { parents: ['irongolem', 'flamedrake'], child: 'metaldra', hint: 'くろがねの きょじんに りゅうの ほのおを やどせ。' },
+
+  // ---- 配合限定モンスター(S・最上位) ----
+  { parents: ['hydra', 'grandragon'], child: 'bahamut', hint: 'きゅうとうの りゅうと だいちの おう、りゅうおうの こうりん。' },
+  { parents: ['hydra', 'frostdragon'], child: 'leviathan', hint: 'きゅうとうの りゅうと こおりの りゅう、うみの ぬし。' },
+  { parents: ['chimera', 'grizzly'], child: 'behemoth', hint: 'つぎはぎの まじゅうと ひぐま、だいちを ゆるがす きょじゅう。' },
+  { parents: ['valkyrie', 'griffin'], child: 'seraphim', hint: 'せんの おとめと れいじゅう、さいこういの だいてんし。' },
+  { parents: ['metaldra', 'diamondgolem'], child: 'metalking', hint: 'こうてつりゅうと ダイヤの きょじん、きんぞくの おう。' },
 ];
 
 /** 特殊レシピ検索(順不同マッチ) */

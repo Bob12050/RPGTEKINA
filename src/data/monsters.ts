@@ -463,6 +463,144 @@ export const SPECIES: SpeciesDef[] = [
     palette: ['#fffef0', '#ffe97a', '#7ae0ff'],
     desc: 'ひかりの せいれいたちの おう。すべての いのちを やさしく みまもる そんざい。',
   }),
+
+  // ============================================================
+  // 配合でしか生まれない でんせつの モンスターたち
+  //   scout: 0 → 野良に出ず、通常配合の抽選からも外れる = 特殊レシピ専用
+  //   B → A → S の3段。中間種がさらに上位の素材になる「配合ツリー」を形成する
+  //   レシピは data/synthesis.ts の SPECIAL_RECIPES で定義
+  // ============================================================
+
+  // ---- Bランク(下位・野良の素材から作れる入口) ----
+  species({
+    id: 'caitsith', name: 'ケットシー', family: 'beast', rank: 'B',
+    base: [70, 26, 30, 24, 40, 26], growth: [9, 3.0, 4.2, 3.2, 5.2, 3.4],
+    learnset: [[1, 'bite'], [8, 'speedsong'], [16, 'powerup'], [26, 'rush']],
+    scout: 0,
+    palette: ['#7a5ad6', '#4a3399', '#f0e0c2'],
+    desc: 'ながぐつを はいた ようせいの ねこ。すばやさは ぐんを ぬく。はいごうでしか であえない。',
+  }),
+  species({
+    id: 'basilisk', name: 'バジリスク', family: 'demon', rank: 'B',
+    base: [80, 22, 34, 30, 24, 22], growth: [10, 2.6, 4.6, 4.0, 3.2, 2.8],
+    learnset: [[1, 'shadow'], [10, 'weaken'], [18, 'slow'], [26, 'darknebula']],
+    scout: 0,
+    resist: { dark: 0.5, holy: 1.5 },
+    palette: ['#4a8c3d', '#2a5a1c', '#c2f03d'],
+    desc: 'みたものを いしに かえる まがんの へび。はいごうから しか うまれない。',
+  }),
+  species({
+    id: 'pegasus', name: 'ペガサス', family: 'mystic', rank: 'B',
+    base: [76, 30, 32, 28, 38, 32], growth: [9.5, 3.2, 4.4, 3.6, 5.0, 4.0],
+    learnset: [[1, 'windcutter'], [10, 'holyray'], [20, 'speedsong'], [30, 'tempest']],
+    scout: 0,
+    resist: { holy: 0.5, wind: 0.5 },
+    palette: ['#f5f8ff', '#a5c9f0', '#7ae0ff'],
+    desc: 'しろい つばさで てんくうを かける せいなる うま。おおくの でんせつしゅの おやとなる。',
+  }),
+
+  // ---- Aランク(中位・Bランク配合種 + 野良から) ----
+  species({
+    id: 'chimera', name: 'キマイラ', family: 'demon', rank: 'A',
+    base: [110, 26, 48, 36, 34, 22], growth: [12.5, 2.6, 5.8, 4.6, 4.4, 2.8],
+    learnset: [[1, 'flamebreath'], [12, 'bite'], [22, 'scorch'], [32, 'rush']],
+    scout: 0,
+    resist: { fire: 0.5 },
+    palette: ['#c23d3d', '#7a1c1c', '#f0a53d'],
+    desc: 'いくつもの けものを つぎはぎに した まじゅう。くちから ほのおを はく。',
+  }),
+  species({
+    id: 'hydra', name: 'ヒュドラ', family: 'dragon', rank: 'A',
+    base: [118, 28, 46, 38, 30, 26], growth: [13.5, 2.8, 5.6, 4.8, 3.6, 3.2],
+    learnset: [[1, 'icebreath'], [12, 'flamebreath'], [24, 'whiteout'], [34, 'scorch']],
+    scout: 0,
+    resist: { fire: 0.5, ice: 0.5 },
+    palette: ['#3d7a5a', '#1c4a33', '#8a3df0'],
+    desc: 'きゅうつの くびを もつ どくりゅう。くびを きられても すぐに はえてくる。',
+  }),
+  species({
+    id: 'griffin', name: 'グリフォン', family: 'mystic', rank: 'A',
+    base: [108, 26, 46, 36, 42, 26], growth: [12.5, 2.6, 5.6, 4.6, 5.4, 3.2],
+    learnset: [[1, 'windcutter'], [12, 'rush'], [22, 'tempest'], [32, 'speedsong']],
+    scout: 0,
+    resist: { wind: 0.5 },
+    palette: ['#e8b93d', '#a8781a', '#f5ead8'],
+    desc: 'ししの からだと わしの つばさを もつ れいじゅう。そらの おうじゃ。',
+  }),
+  species({
+    id: 'sphinx', name: 'スフィンクス', family: 'mystic', rank: 'A',
+    base: [104, 40, 40, 36, 32, 44], growth: [12, 4.2, 5.0, 4.6, 3.8, 5.4],
+    learnset: [[1, 'lightning'], [12, 'holyray'], [22, 'gigavolt'], [32, 'healall']],
+    scout: 0,
+    resist: { thunder: 0.5, holy: 0.5 },
+    palette: ['#f0d43d', '#b5851a', '#e8d5a0'],
+    desc: 'なぞかけを だす いにしえの しんじゅう。こたえられぬ ものに ばつを あたえる。',
+  }),
+  species({
+    id: 'valkyrie', name: 'ヴァルキリー', family: 'mystic', rank: 'A',
+    base: [106, 36, 46, 38, 40, 34], growth: [12.5, 3.6, 5.6, 4.8, 5.0, 4.2],
+    learnset: [[1, 'holyray'], [12, 'powerup'], [22, 'healall'], [32, 'revive']],
+    scout: 0,
+    resist: { holy: 0.5, dark: 0.5 },
+    palette: ['#c9d8f0', '#6b8cb0', '#f0d43d'],
+    desc: 'せんじょうに まいおりる せんの おとめ。ゆうしゃの たましいを てんへ みちびく。',
+  }),
+  species({
+    id: 'metaldra', name: 'こうてつりゅうメタルドラ', family: 'material', rank: 'A',
+    base: [115, 20, 44, 56, 20, 20], growth: [13, 2.2, 5.4, 6.6, 2.6, 2.6],
+    learnset: [[1, 'flamebreath'], [12, 'boulder'], [24, 'scorch'], [34, 'guardsong']],
+    scout: 0,
+    resist: { fire: 0.5, ice: 0.5, thunder: 1.5 },
+    palette: ['#8a93a5', '#4a525f', '#c9ced8'],
+    desc: 'くろがねの きょじんに りゅうの たましいを やどした もの。まもりは てっぺき。',
+  }),
+
+  // ---- Sランク(最上位・Aランク配合種どうし などから) ----
+  species({
+    id: 'bahamut', name: 'りゅうおうバハムート', family: 'dragon', rank: 'S',
+    base: [185, 55, 64, 52, 40, 44], growth: [17, 4.5, 6.6, 5.6, 4.2, 4.8],
+    learnset: [[1, 'scorch'], [15, 'gigavolt'], [25, 'inferno'], [35, 'whiteout']],
+    scout: 0, exp: 750, gold: 450,
+    resist: { fire: 0.5, ice: 0.5, thunder: 0.5 },
+    palette: ['#3d5ac2', '#1c2f7a', '#c9d8ff'],
+    desc: 'すべての りゅうを したがえる りゅうの おう。そのいぶきは てんちを さく。',
+  }),
+  species({
+    id: 'leviathan', name: 'かいりゅうレヴィアタン', family: 'dragon', rank: 'S',
+    base: [195, 50, 58, 54, 42, 46], growth: [17.5, 4.2, 6.2, 5.8, 4.4, 5.0],
+    learnset: [[1, 'whiteout'], [15, 'blizzara'], [25, 'tempest'], [35, 'gigavolt']],
+    scout: 0, exp: 750, gold: 450,
+    resist: { ice: 0, fire: 1.5, thunder: 0.5 },
+    palette: ['#1c6b8c', '#0d3d5a', '#6ee7ff'],
+    desc: 'ふかい うみの そこに ねむる きょだいな かいりゅう。つなみを おこして すべてを のみこむ。',
+  }),
+  species({
+    id: 'behemoth', name: 'きょじゅうベヒーモス', family: 'beast', rank: 'S',
+    base: [210, 30, 66, 50, 34, 24], growth: [18, 3.0, 7.0, 5.6, 4.0, 3.0],
+    learnset: [[1, 'boulder'], [15, 'rush'], [25, 'powerup'], [35, 'scorch']],
+    scout: 0, exp: 750, gold: 450,
+    resist: { thunder: 0.5 },
+    palette: ['#5c3d26', '#331f13', '#c23d3d'],
+    desc: 'だいちを ゆるがして あるく きょだいな まじゅう。その あしおとは じしんの ごとし。',
+  }),
+  species({
+    id: 'seraphim', name: 'だいてんしセラフ', family: 'mystic', rank: 'S',
+    base: [170, 60, 56, 48, 50, 58], growth: [16.5, 5.5, 6.2, 5.4, 5.6, 6.4],
+    learnset: [[1, 'holyray'], [15, 'healall'], [25, 'gigavolt'], [35, 'revive']],
+    scout: 0, exp: 750, gold: 450,
+    resist: { holy: 0, dark: 0.5 },
+    palette: ['#fffef0', '#ffe97a', '#f0f5ff'],
+    desc: 'むっつの つばさを もつ さいこういの てんし。せいなる ひかりで あくを ほろぼす。',
+  }),
+  species({
+    id: 'metalking', name: 'メタルキング', family: 'material', rank: 'S',
+    base: [160, 25, 55, 72, 22, 24], growth: [15.5, 2.6, 6.2, 8.0, 2.4, 3.0],
+    learnset: [[1, 'boulder'], [12, 'holyray'], [24, 'guardsong'], [36, 'gigavolt']],
+    scout: 0, exp: 900, gold: 600,
+    resist: { fire: 0.5, ice: 0.5, thunder: 0.5, wind: 0.5, dark: 0.5, holy: 0.5 },
+    palette: ['#c9ced8', '#7a8394', '#f2f5fa'],
+    desc: 'きんぞくの モンスターたちの おうさま。おうかんと たてに つつまれた てっぺきの まもり。',
+  }),
 ];
 
 const speciesMap = new Map(SPECIES.map((s) => [s.id, s]));
