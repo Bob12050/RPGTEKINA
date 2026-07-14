@@ -46,9 +46,10 @@ export type BattleEvent =
   | { type: 'mpChange'; unitId: string; delta: number; mpAfter: number }
   | { type: 'ko'; unitId: string }
   | { type: 'scoutAttempt'; rate: number }
+  | { type: 'newWave'; waveIndex: number }
   | { type: 'end'; result: BattleResult };
 
-export type BattleResult = 'win' | 'lose' | 'flee' | 'scouted';
+export type BattleResult = 'win' | 'lose' | 'flee';
 
 export interface BattleRewards {
   exp: number;
@@ -127,31 +128,55 @@ export interface EnemySpec {
   level: number;
 }
 
+/** WAVE間の小休止で回復する割合 */
+const WAVE_REST_RATIO = 0.3;
+
 export class Battle {
   allies: BattleUnit[];
   enemies: BattleUnit[];
-  isBoss: boolean;
+  /** 全WAVE(最後のWAVEがボスかどうかは bossFinalWave) */
+  waves: EnemySpec[][];
+  waveIndex = 0;
+  bossFinalWave: boolean;
   result: BattleResult | null = null;
   rewards: BattleRewards = { exp: 0, gold: 0 };
   /** ごちそうアイテムによるスカウト倍率(戦闘終了まで持続) */
   scoutBoost = 1;
-  /** スカウト成功した敵(仲間加入処理はUI側) */
-  scoutedEnemy: BattleUnit | null = null;
+  /** スカウト成功した敵(戦闘終了後にUI側が加入処理する) */
+  scoutedEnemies: EnemySpec[] = [];
+  /** 倒した種族(最終ボス撃破判定などに使う) */
+  defeatedSpecies = new Set<string>();
   private fleeAttempts = 0;
 
-  constructor(party: MonsterInstance[], enemySpecs: EnemySpec[], isBoss = false) {
+  constructor(party: MonsterInstance[], waves: EnemySpec[][], bossFinalWave = false) {
+    if (waves.length === 0 || waves.every((w) => w.length === 0)) throw new Error('敵のいないバトル');
     this.allies = party.map(makeAllyUnit);
+    this.waves = waves;
+    this.bossFinalWave = bossFinalWave;
+    this.enemies = this.buildWaveUnits(0);
+  }
+
+  /** いま戦っているのがボスWAVEか */
+  isBossWave(): boolean {
+    return this.bossFinalWave && this.waveIndex === this.waves.length - 1;
+  }
+
+  get waveCount(): number {
+    return this.waves.length;
+  }
+
+  private buildWaveUnits(index: number): BattleUnit[] {
+    const specs = this.waves[index]!;
     // 同種が複数いるときだけ A/B/C を付ける
     const counts = new Map<string, number>();
-    for (const e of enemySpecs) counts.set(e.speciesId, (counts.get(e.speciesId) ?? 0) + 1);
+    for (const e of specs) counts.set(e.speciesId, (counts.get(e.speciesId) ?? 0) + 1);
     const seen = new Map<string, number>();
-    this.enemies = enemySpecs.map((e) => {
+    return specs.map((e) => {
       const n = seen.get(e.speciesId) ?? 0;
       seen.set(e.speciesId, n + 1);
       const suffix = (counts.get(e.speciesId) ?? 1) > 1 ? String.fromCharCode(65 + n) : '';
       return makeEnemyUnit(e.speciesId, e.level, suffix);
     });
-    this.isBoss = isBoss;
   }
 
   aliveAllies(): BattleUnit[] {
@@ -226,11 +251,10 @@ export class Battle {
     ev.push({ type: 'scoutAttempt', rate });
     if (rollScout(rate)) {
       ev.push({ type: 'message', text: `${target.name}は なかまに なりたそうに こちらを みている!` });
-      ev.push({ type: 'message', text: `${target.name}が なかまに なった!` });
-      this.scoutedEnemy = target;
-      target.hp = 0; // 戦闘から離脱(KOイベントは出さない)
-      this.result = 'scouted';
-      ev.push({ type: 'end', result: 'scouted' });
+      ev.push({ type: 'message', text: `${target.name}が なかまに なった! (たたかいのあと ごうりゅうする)` });
+      // 仲間はいったん戦線を離脱し、戦闘終了後に加入する。バトルは続行!
+      this.scoutedEnemies.push({ speciesId: target.speciesId, level: target.level });
+      target.hp = 0; // 戦闘から離脱(KOイベント・経験値なし)
     } else {
       ev.push({ type: 'message', text: `${target.name}は そっぽを むいてしまった…。` });
       this.scoutBoost = 1; // ごちそう効果はスカウト1回で消費
@@ -285,7 +309,7 @@ export class Battle {
   // ---- にげる ----
   private doFlee(ev: BattleEvent[]): void {
     ev.push({ type: 'message', text: 'みんなは にげだした!' });
-    if (this.isBoss) {
+    if (this.isBossWave()) {
       ev.push({ type: 'message', text: 'しかし まわりこまれてしまった!' });
       return;
     }
@@ -326,7 +350,8 @@ export class Battle {
       } else {
         this.allyAct(ev, t.unit, t.action);
       }
-      this.checkEnd(ev);
+      // ターン途中は勝敗判定のみ(次WAVEの投入はターン終了時にまとめて行う)
+      this.checkEnd(ev, false);
     }
   }
 
@@ -335,7 +360,7 @@ export class Battle {
     for (const e of this.aliveEnemies()) {
       if (this.result) break;
       this.enemyAct(ev, e);
-      this.checkEnd(ev);
+      this.checkEnd(ev, false);
     }
   }
 
@@ -543,33 +568,67 @@ export class Battle {
         type: 'message',
         text: target.side === 'enemy' ? `${target.name}を たおした!` : `${target.name}は ちからつきた…。`,
       });
+      // 倒した敵の報酬はその場で加算(スカウトで離脱した敵はここを通らない)
+      if (target.side === 'enemy') {
+        this.rewards.exp += expFromEnemy(target.speciesId, target.level);
+        this.rewards.gold += goldFromEnemy(target.speciesId, target.level);
+        this.defeatedSpecies.add(target.speciesId);
+      }
     }
   }
 
-  private checkEnd(ev: BattleEvent[]): void {
+  /**
+   * 勝敗を判定する。advanceWave=true(ターン終了時)のときだけ
+   * 次のWAVEを投入する — ターン途中では敗北判定のみ行う。
+   */
+  private checkEnd(ev: BattleEvent[], advanceWave = true): void {
     if (this.result) return;
-    if (this.aliveEnemies().length === 0) {
-      this.result = 'win';
-      this.rewards = this.computeRewards();
-      ev.push({ type: 'message', text: 'まものたちを やっつけた!' });
-      ev.push({ type: 'end', result: 'win' });
-    } else if (this.aliveAllies().length === 0) {
+    if (this.aliveAllies().length === 0) {
       this.result = 'lose';
       ev.push({ type: 'message', text: 'みんなは ぜんめつしてしまった…。' });
       ev.push({ type: 'end', result: 'lose' });
+      return;
+    }
+    if (this.aliveEnemies().length === 0) {
+      if (this.waveIndex >= this.waves.length - 1) {
+        this.result = 'win';
+        ev.push({ type: 'message', text: 'まものたちを やっつけた!' });
+        ev.push({ type: 'end', result: 'win' });
+      } else if (advanceWave) {
+        this.advanceWave(ev);
+      }
     }
   }
 
-  private computeRewards(): BattleRewards {
-    let exp = 0;
-    let gold = 0;
-    for (const e of this.enemies) {
-      // スカウトした敵からは経験値・ゴールドは入らない
-      if (this.scoutedEnemy && e.id === this.scoutedEnemy.id) continue;
-      exp += expFromEnemy(e.speciesId, e.level);
-      gold += goldFromEnemy(e.speciesId, e.level);
+  /** 次のWAVEを投入する(小休止つき・戦闘はシームレスに続く) */
+  private advanceWave(ev: BattleEvent[]): void {
+    this.waveIndex += 1;
+    this.fleeAttempts = 0;
+    // 小休止: 生存メンバーのHP/MPを回復
+    let rested = false;
+    for (const u of this.aliveAllies()) {
+      const healHp = Math.min(u.stats.hp - u.hp, Math.floor(u.stats.hp * WAVE_REST_RATIO));
+      const healMp = Math.min(u.stats.mp - u.mp, Math.floor(u.stats.mp * WAVE_REST_RATIO));
+      if (healHp > 0) {
+        u.hp += healHp;
+        ev.push({ type: 'hpChange', unitId: u.id, delta: healHp, hpAfter: u.hp });
+        rested = true;
+      }
+      if (healMp > 0) {
+        u.mp += healMp;
+        ev.push({ type: 'mpChange', unitId: u.id, delta: healMp, mpAfter: u.mp });
+        rested = true;
+      }
     }
-    return { exp, gold };
+    if (rested) ev.push({ type: 'message', text: 'なかまたちは ひといき ついた! (HP/MPが すこし かいふく)' });
+
+    this.enemies = this.buildWaveUnits(this.waveIndex);
+    ev.push({ type: 'newWave', waveIndex: this.waveIndex });
+    const names = [...new Set(this.enemies.map((e) => getSpecies(e.speciesId).name))].join(' と ');
+    ev.push({
+      type: 'message',
+      text: this.isBossWave() ? `${names}が たちはだかった!!` : `${names}が あらわれた!`,
+    });
   }
 }
 

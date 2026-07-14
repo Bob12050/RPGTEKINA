@@ -31,10 +31,8 @@ import {
 const FINAL_BOSS_ID = 'tekina';
 
 export interface BattleOptions {
-  /** ボス戦(演出強化・逃走不可) */
-  isBoss?: boolean;
-  /** にげるコマンドを出すか(ボスや連戦の演出で変える) */
-  allowFlee?: boolean;
+  /** 最後のWAVEがボス(演出強化・そのWAVE中は逃走不可) */
+  bossFinalWave?: boolean;
   /** 戦闘終了時に結果を返す(ステージ進行の制御に使う) */
   onComplete: (result: BattleResult) => void;
 }
@@ -64,11 +62,9 @@ function msgRect(): { x: number; y: number; w: number; h: number } {
 
 export class BattleScene implements Scene {
   private battle: Battle;
-  private isBoss: boolean;
-  private allowFlee: boolean;
   private onComplete: (result: BattleResult) => void;
   private phase: Phase = 'playback';
-  private mainMenu: Menu;
+  private mainMenu = new Menu([{ label: 'たたかう' }, { label: 'スカウト' }, { label: 'どうぐ' }, { label: 'にげる' }]);
   private actionMenu = new Menu([{ label: 'こうげき' }, { label: 'とくぎ' }, { label: 'ぼうぎょ' }]);
   private skillMenu = new Menu([]);
   private itemMenu = new Menu([]);
@@ -87,24 +83,17 @@ export class BattleScene implements Scene {
 
   constructor(
     private app: App,
-    enemySpecs: EnemySpec[],
+    waves: EnemySpec[][],
     opts: BattleOptions,
   ) {
-    this.isBoss = opts.isBoss ?? false;
-    this.allowFlee = opts.allowFlee ?? true;
     this.onComplete = opts.onComplete;
-    // にげるはボス戦や逃走不可の連戦では出さない
-    const commands = [{ label: 'たたかう' }, { label: 'スカウト' }, { label: 'どうぐ' }];
-    if (this.allowFlee && !this.isBoss) commands.push({ label: 'にげる' });
-    this.mainMenu = new Menu(commands);
-
     const state = requireState(app);
-    this.battle = new Battle(state.party, enemySpecs, this.isBoss);
+    this.battle = new Battle(state.party, waves, opts.bossFinalWave ?? false);
     state.battleCount += 1;
-    // ずかんの「はっけん」登録(ボス戦も含めてここで確実に記録する)
-    for (const spec of enemySpecs) markSeen(state, spec.speciesId);
+    // ずかんの「はっけん」登録(全WAVE分をここで確実に記録する)
+    for (const wave of waves) for (const spec of wave) markSeen(state, spec.speciesId);
     const names = [...new Set(this.battle.enemies.map((e) => getSpecies(e.speciesId).name))];
-    const intro: BattleEvent[] = this.isBoss
+    const intro: BattleEvent[] = this.battle.isBossWave()
       ? [{ type: 'message', text: `${names.join(' と ')}が たちはだかった!!` }]
       : [{ type: 'message', text: `${names.join(' と ')}が とびだしてきた!` }];
     this.eventQueue.push(...intro);
@@ -379,6 +368,7 @@ export class BattleScene implements Scene {
         case 'hpChange':
         case 'mpChange':
         case 'ko':
+        case 'newWave':
           // battle 側の状態を描画が直接参照するので何もしなくてよい
           break;
         case 'end':
@@ -398,15 +388,15 @@ export class BattleScene implements Scene {
     this.mainMenu.cursor = 0;
   }
 
-  /** 勝利・スカウト成功・敗北後のメッセージを積む */
+  /** 勝利・敗北・逃走後のメッセージを積む */
   private queuePostBattle(result: BattleResult): void {
     const state = requireState(this.app);
     const push = (text: string) => this.eventQueue.push({ type: 'message', text });
     this.battle.syncBack();
 
-    if (result === 'win' || result === 'scouted') {
-      if (result === 'scouted' && this.battle.scoutedEnemy) {
-        const e = this.battle.scoutedEnemy;
+    // スカウトした仲間は 勝利/逃走なら合流する(全滅時は置きざりに…)
+    if (result !== 'lose') {
+      for (const e of this.battle.scoutedEnemies) {
         const sp = getSpecies(e.speciesId);
         const joined = createMonster(e.speciesId, e.level);
         markScouted(state, e.speciesId);
@@ -415,6 +405,9 @@ export class BattleScene implements Scene {
         else if (where === 'farm') push(`${sp.name}は ぼくじょうに おくられた!`);
         else push(`しかし ぼくじょうが いっぱいで ${sp.name}は かえっていった…。`);
       }
+    }
+
+    if (result === 'win') {
       const { exp, gold } = this.battle.rewards;
       if (exp > 0 || gold > 0) {
         push(`けいけんち ${exp} かくとく!`);
@@ -434,8 +427,7 @@ export class BattleScene implements Scene {
         }
       }
       // 最終ボス(まりゅうテキーナ)撃破で世界に平和が訪れる
-      const beatFinalBoss = this.battle.enemies.some((e) => e.speciesId === FINAL_BOSS_ID);
-      if (result === 'win' && beatFinalBoss && !state.flags['clearedBoss']) {
+      if (this.battle.defeatedSpecies.has(FINAL_BOSS_ID) && !state.flags['clearedBoss']) {
         state.flags['clearedBoss'] = true;
         push('まりゅうテキーナを うちたおした!!');
         push('せかいに へいわが おとずれた… あなたは しんの モンスターマスターだ!');
@@ -457,9 +449,9 @@ export class BattleScene implements Scene {
   // ==================== 描画 ====================
 
   draw(ctx: CanvasRenderingContext2D): void {
-    // 背景
+    // 背景(ボスWAVEでは赤黒く染まる)
     const grad = ctx.createLinearGradient(0, 0, 0, view.h);
-    if (this.isBoss) {
+    if (this.battle.isBossWave()) {
       grad.addColorStop(0, '#1a0a14');
       grad.addColorStop(1, '#3d1424');
     } else {
@@ -474,6 +466,16 @@ export class BattleScene implements Scene {
     ctx.beginPath();
     ctx.ellipse(view.w / 2, groundY, Math.min(380, view.w * 0.44), 70, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // WAVE表示(連戦のときだけ)
+    if (this.battle.waveCount > 1) {
+      const label = this.battle.isBossWave() ? 'BOSS' : `WAVE ${this.battle.waveIndex + 1}/${this.battle.waveCount}`;
+      drawText(ctx, label, view.w - 14, 10, {
+        align: 'right',
+        font: FONT_SMALL,
+        color: this.battle.isBossWave() ? '#f0823d' : 'rgba(255,255,255,0.75)',
+      });
+    }
 
     this.drawEnemies(ctx);
     this.drawAllyPanels(ctx);
@@ -510,7 +512,7 @@ export class BattleScene implements Scene {
 
   private enemyPositions(): { unit: BattleUnit; x: number; y: number }[] {
     const alive = this.battle.aliveEnemies();
-    const scale = this.isBoss ? 9 : 6;
+    const scale = this.battle.isBossWave() ? 9 : 6;
     const size = 16 * scale;
     const gap = size + (isPortrait() ? 14 : 40);
     const groundY = isPortrait() ? 390 : 330;
@@ -522,7 +524,7 @@ export class BattleScene implements Scene {
   }
 
   private drawEnemies(ctx: CanvasRenderingContext2D): void {
-    const scale = this.isBoss ? 9 : 6;
+    const scale = this.battle.isBossWave() ? 9 : 6;
     const positions = this.enemyPositions();
     const targets = this.battle.aliveEnemies();
     for (const { unit, x, y } of positions) {

@@ -74,7 +74,7 @@ export class StageSelectScene implements Scene {
       const dy = view.h - (p ? 110 : 130);
       drawWindow(ctx, 12, dy, view.w - 24, p ? 96 : 110);
       drawText(ctx, stage.desc, 32, dy + 18, { font: FONT_SMALL, color: '#ccccee' });
-      drawText(ctx, `てき ${stage.waves.length}せん + ボス`, 32, dy + 48, { font: FONT_SMALL, color: '#aaaacc' });
+      drawText(ctx, `WAVE ${stage.waves.length} + ボス`, 32, dy + 48, { font: FONT_SMALL, color: '#aaaacc' });
       drawText(ctx, 'Z/A: いどむ   X/B: もどる', view.w - 32, dy + 48, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
     }
   }

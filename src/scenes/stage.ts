@@ -1,47 +1,44 @@
 // ============================================================
 // ステージ進行シーン
-//   連戦(waves) → ボス を順に消化する。HPは道中もちこし。
-//   バトルの結果を onComplete で受け取り、次の波・クリア・失敗へ分岐する。
+//   ステージ全体を「1つのシームレスなバトル」として実行する。
+//   敵を全滅させると次のWAVEがそのまま流れ込み(小休止つき)、
+//   最後のWAVEがボス。幕間画面はもうない。
 // ============================================================
 import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
 import { getItem } from '../data/items';
-import { getStage, type StageEnemy } from '../data/stages';
+import { getStage } from '../data/stages';
 import type { BattleResult, EnemySpec } from '../game/battle';
 import { maxStats } from '../game/monster';
 import { addItem, healParty, markStageCleared } from '../game/state';
 import { drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, isPortrait, MessageBox, view } from '../ui/window';
 import { BattleScene } from './battle';
 
-type Phase = 'intro' | 'interstitial' | 'clear' | 'failed';
+type Phase = 'intro' | 'clear' | 'failed';
 
 export class StageScene implements Scene {
   private phase: Phase = 'intro';
-  private waves: StageEnemy[][];
-  private idx = 0; // 次にたたかう波
   private messages = new MessageBox();
   private time = 0;
 
   constructor(
     private app: App,
     private stageId: string,
-  ) {
-    const stage = getStage(stageId);
-    this.waves = [...stage.waves, stage.boss];
-  }
+  ) {}
 
   onEnter(): void {
     this.app.input.flush();
-    this.phase = 'intro';
   }
 
-  private startWave(): void {
-    const isBoss = this.idx === this.waves.length - 1;
-    const enemies: EnemySpec[] = this.waves[this.idx]!.map((e) => ({ speciesId: e.speciesId, level: e.level }));
+  /** ステージ開始: 全WAVE+ボスをひとつのバトルとして起動する */
+  private startStage(): void {
+    const stage = getStage(this.stageId);
+    const waves: EnemySpec[][] = [...stage.waves, stage.boss].map((wave) =>
+      wave.map((e) => ({ speciesId: e.speciesId, level: e.level })),
+    );
     this.app.scenes.push(
-      new BattleScene(this.app, enemies, {
-        isBoss,
-        allowFlee: !isBoss,
+      new BattleScene(this.app, waves, {
+        bossFinalWave: true,
         onComplete: (r) => this.onBattleDone(r),
       }),
     );
@@ -54,30 +51,11 @@ export class StageScene implements Scene {
       return;
     }
     if (result === 'flee') {
-      this.app.scenes.pop(); // ステージ中断してセレクトへ
+      this.app.scenes.pop(); // ステージから撤退してセレクトへ
       return;
     }
-    // win / scouted
-    this.idx += 1;
-    if (this.idx >= this.waves.length) {
-      this.grantClear();
-      this.phase = 'clear';
-    } else {
-      this.restParty(); // 波の合間に ひといき(HP/MPすこし回復)
-      this.phase = 'interstitial';
-      this.app.input.flush();
-    }
-  }
-
-  /** WAVEクリアごとの小休止: 生存メンバーのHP/MPを30%回復する */
-  private restParty(): void {
-    const state = requireState(this.app);
-    for (const m of state.party) {
-      if (m.hp <= 0) continue;
-      const ms = maxStats(m);
-      m.hp = Math.min(ms.hp, m.hp + Math.floor(ms.hp * 0.3));
-      m.mp = Math.min(ms.mp, m.mp + Math.floor(ms.mp * 0.3));
-    }
+    this.grantClear();
+    this.phase = 'clear';
   }
 
   private grantClear(): void {
@@ -105,12 +83,8 @@ export class StageScene implements Scene {
 
     switch (this.phase) {
       case 'intro':
-        if (key === 'confirm') this.startWave();
+        if (key === 'confirm') this.startStage();
         else if (key === 'cancel') this.app.scenes.pop();
-        break;
-      case 'interstitial':
-        if (key === 'confirm') this.startWave();
-        else if (key === 'cancel') this.app.scenes.pop(); // 中断
         break;
       case 'clear':
         if (key === 'confirm' || key === 'cancel') {
@@ -129,7 +103,6 @@ export class StageScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    // intro/interstitial/clear/failed のときだけ描く(バトル中はバトルが上に重なる)
     const grad = ctx.createLinearGradient(0, 0, 0, view.h);
     grad.addColorStop(0, '#0a1020');
     grad.addColorStop(1, '#182438');
@@ -137,44 +110,30 @@ export class StageScene implements Scene {
     ctx.fillRect(0, 0, view.w, view.h);
 
     const stage = getStage(this.stageId);
-    const total = this.waves.length;
     const p = isPortrait();
     const cx = view.w / 2;
 
-    if (this.phase === 'intro' || this.phase === 'interstitial') {
-      const title = this.phase === 'intro' ? stage.name : `${stage.name}  とっぱ ちゅう!`;
-      drawText(ctx, title, cx, p ? 70 : 90, { align: 'center', color: '#ffd94a' });
-      const cur = Math.min(this.idx + 1, total);
-      const isBossNext = this.idx === total - 1;
-      drawText(ctx, isBossNext ? `つぎは ボス! (${cur}/${total})` : `WAVE ${cur} / ${total}`, cx, p ? 110 : 140, {
+    if (this.phase === 'intro') {
+      drawText(ctx, stage.name, cx, p ? 70 : 90, { align: 'center', color: '#ffd94a' });
+      drawText(ctx, `WAVE ${stage.waves.length} + ボス (れんせん)`, cx, p ? 110 : 140, { align: 'center' });
+      drawText(ctx, `すいしょうレベル ${stage.recLevel}`, cx, p ? 150 : 180, {
         align: 'center',
-        color: isBossNext ? '#f0823d' : '#ffffff',
+        font: FONT_SMALL,
+        color: '#aaaacc',
       });
-      if (this.phase === 'intro') {
-        drawText(ctx, `すいしょうレベル ${stage.recLevel}`, cx, p ? 150 : 180, { align: 'center', font: FONT_SMALL, color: '#aaaacc' });
-      } else {
-        drawText(ctx, 'なかまたちは ひといき ついた (HP/MPが すこし かいふく)', cx, p ? 150 : 180, {
-          align: 'center',
-          font: FONT_SMALL,
-          color: '#8fd44a',
-        });
-      }
+      drawText(ctx, 'WAVEの あいまに HP/MPが すこし かいふくする', cx, p ? 178 : 208, {
+        align: 'center',
+        font: FONT_SMALL,
+        color: '#8fd44a',
+      });
 
-      // パーティのHP状況
-      this.drawPartyStatus(ctx, cx, p ? 210 : 260);
+      this.drawPartyStatus(ctx, cx, p ? 230 : 280);
 
       drawWindow(ctx, cx - (p ? 180 : 220), view.h - 90, p ? 360 : 440, 60);
-      drawText(
-        ctx,
-        this.phase === 'intro' ? 'Z/A: はじめる    X/B: もどる' : 'Z/A: つぎへ    X/B: ちゅうだん',
-        cx,
-        view.h - 72,
-        { align: 'center', font: FONT_SMALL },
-      );
+      drawText(ctx, 'Z/A: はじめる    X/B: もどる', cx, view.h - 72, { align: 'center', font: FONT_SMALL });
       return;
     }
 
-    // clear / failed はメッセージ中心
     if (this.phase === 'clear') {
       drawText(ctx, '★ STAGE CLEAR ★', cx, p ? 120 : 160, { align: 'center', color: '#ffd94a' });
     } else {
