@@ -17,7 +17,7 @@ import {
 } from '../game/battle';
 import { START_MAP, START_X, START_Y } from '../data/maps';
 import { createMonster, gainExp } from '../game/monster';
-import { addMonster, consumeItem, healParty, markScouted } from '../game/state';
+import { addMonster, consumeItem, healParty, markScouted, markSeen } from '../game/state';
 import { drawMonster } from '../ui/sprites';
 import {
   drawGauge,
@@ -80,6 +80,8 @@ export class BattleScene implements Scene {
     const state = requireState(app);
     this.battle = new Battle(state.party, enemySpecs, isBoss);
     state.battleCount += 1;
+    // ずかんの「はっけん」登録(ボス戦も含めてここで確実に記録する)
+    for (const spec of enemySpecs) markSeen(state, spec.speciesId);
     const names = [...new Set(this.battle.enemies.map((e) => getSpecies(e.speciesId).name))];
     const intro: BattleEvent[] = this.isBoss
       ? [{ type: 'message', text: 'まりゅうテキーナが たちはだかった!!' }]

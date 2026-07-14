@@ -6,6 +6,16 @@
 /** 属性 */
 export type Element = 'none' | 'fire' | 'ice' | 'thunder' | 'wind' | 'dark' | 'holy';
 
+export const ELEMENT_NAMES: Record<Element, string> = {
+  none: 'むぞくせい',
+  fire: 'ほのお',
+  ice: 'こおり',
+  thunder: 'いなずま',
+  wind: 'かぜ',
+  dark: 'やみ',
+  holy: 'ひかり',
+};
+
 /** モンスターの系統 */
 export type Family =
   | 'slime' // スライム系

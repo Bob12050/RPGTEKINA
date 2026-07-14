@@ -13,13 +13,20 @@ import { saveGame } from '../game/save';
 import { consumeItem } from '../game/state';
 import { monsterLabel, monsterNote, speciesInfo } from '../ui/format';
 import { drawMonster } from '../ui/sprites';
+import { DexScene } from './dex';
 import { drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, Menu, MessageBox, view, isPortrait, wrapText } from '../ui/window';
 
 type Phase = 'main' | 'party' | 'itemPick' | 'itemTarget' | 'message';
 
 export class PauseMenuScene implements Scene {
   private phase: Phase = 'main';
-  private mainMenu = new Menu([{ label: 'つよさ' }, { label: 'どうぐ' }, { label: 'セーブ' }, { label: 'とじる' }]);
+  private mainMenu = new Menu([
+    { label: 'つよさ' },
+    { label: 'どうぐ' },
+    { label: 'ずかん' },
+    { label: 'セーブ' },
+    { label: 'とじる' },
+  ]);
   private partyMenu = new Menu([]);
   private itemMenu = new Menu([]);
   private targetMenu = new Menu([]);
@@ -55,13 +62,16 @@ export class PauseMenuScene implements Scene {
             this.buildItemMenu();
             this.phase = 'itemPick';
             break;
-          case 2: {
+          case 2:
+            this.app.scenes.push(new DexScene(this.app));
+            break;
+          case 3: {
             const ok = saveGame(state);
             this.messages.setPages([ok ? 'ぼうけんの きろくを のこした!' : 'セーブに しっぱいした…。']);
             this.phase = 'message';
             break;
           }
-          case 3:
+          case 4:
             this.app.scenes.pop();
             break;
         }
