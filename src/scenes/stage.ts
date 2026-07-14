@@ -63,8 +63,20 @@ export class StageScene implements Scene {
       this.grantClear();
       this.phase = 'clear';
     } else {
+      this.restParty(); // 波の合間に ひといき(HP/MPすこし回復)
       this.phase = 'interstitial';
       this.app.input.flush();
+    }
+  }
+
+  /** WAVEクリアごとの小休止: 生存メンバーのHP/MPを30%回復する */
+  private restParty(): void {
+    const state = requireState(this.app);
+    for (const m of state.party) {
+      if (m.hp <= 0) continue;
+      const ms = maxStats(m);
+      m.hp = Math.min(ms.hp, m.hp + Math.floor(ms.hp * 0.3));
+      m.mp = Math.min(ms.mp, m.mp + Math.floor(ms.mp * 0.3));
     }
   }
 
@@ -140,6 +152,12 @@ export class StageScene implements Scene {
       });
       if (this.phase === 'intro') {
         drawText(ctx, `すいしょうレベル ${stage.recLevel}`, cx, p ? 150 : 180, { align: 'center', font: FONT_SMALL, color: '#aaaacc' });
+      } else {
+        drawText(ctx, 'なかまたちは ひといき ついた (HP/MPが すこし かいふく)', cx, p ? 150 : 180, {
+          align: 'center',
+          font: FONT_SMALL,
+          color: '#8fd44a',
+        });
       }
 
       // パーティのHP状況

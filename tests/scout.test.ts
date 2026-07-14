@@ -45,4 +45,14 @@ describe('scoutRate', () => {
     const normal = scoutRate(100, targetOf('dekapuni', 13))!;
     expect(meta).toBeLessThan(normal);
   });
+
+  it('序盤(スターター2体)でも F ランクに 20%以上 出る', () => {
+    // ぷにきちLv3 + ぴょんたLv3 の攻撃力合計はおよそ 30
+    const starterAtkSum = 30;
+    const fullHp = scoutRate(starterAtkSum, targetOf('puni', 2))!;
+    expect(fullHp).toBeGreaterThanOrEqual(20);
+    // HPを削れば 40%以上
+    const hurt = scoutRate(starterAtkSum, targetOf('puni', 2, 0.25))!;
+    expect(hurt).toBeGreaterThanOrEqual(40);
+  });
 });

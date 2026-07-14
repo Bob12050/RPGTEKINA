@@ -11,7 +11,8 @@ function toStats(a: StatArray): Stats {
   return { hp: a[0], mp: a[1], atk: a[2], def: a[3], agi: a[4], wis: a[5] };
 }
 
-const DEFAULT_SCOUT: Record<Rank, number> = { F: 0.8, E: 1.0, D: 1.3, C: 1.7, B: 2.2, A: 3.0, S: 4.0 };
+// 低ランクほどスカウトしやすく(序盤の成功率を体感25〜50%に)
+const DEFAULT_SCOUT: Record<Rank, number> = { F: 0.55, E: 0.75, D: 1.05, C: 1.7, B: 2.2, A: 3.0, S: 4.0 };
 const DEFAULT_EXP: Record<Rank, number> = { F: 5, E: 9, D: 16, C: 30, B: 55, A: 95, S: 200 };
 const DEFAULT_GOLD: Record<Rank, number> = { F: 4, E: 7, D: 13, C: 24, B: 45, A: 80, S: 160 };
 
@@ -54,7 +55,7 @@ export const SPECIES: SpeciesDef[] = [
   species({
     id: 'puni', name: 'ぷに', family: 'slime', rank: 'F',
     base: [22, 6, 10, 9, 10, 7], growth: [5, 1.2, 2.4, 2.2, 2.0, 1.5],
-    learnset: [[3, 'heal']],
+    learnset: [[1, 'bite'], [3, 'heal']],
     palette: ['#4aa3ff', '#2a6fd6', '#bfe0ff'],
     desc: 'ぷにぷにした からだの あいくるしい モンスター。冒険の あいぼうに ぴったり。',
   }),

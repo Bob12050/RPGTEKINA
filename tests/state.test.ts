@@ -17,10 +17,11 @@ describe('ゲーム状態', () => {
     expect(state.seenSpecies).toContain('wolf');
   });
 
-  it('スターターは最初から図鑑に登録されている', () => {
+  it('スターターは2体いて、最初から図鑑に登録されている', () => {
     const state = newGame();
-    expect(state.seenSpecies).toContain('puni');
+    expect(state.party).toHaveLength(2); // 連戦で 1対2 にならないように
     expect(state.scoutedSpecies).toContain('puni');
+    expect(state.scoutedSpecies).toContain('rabbit');
   });
 
   it('パーティが満員なら牧場へ送られる', () => {

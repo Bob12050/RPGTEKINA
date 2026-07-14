@@ -6,18 +6,20 @@ import { FARM_MAX, PARTY_MAX, SAVE_VERSION } from '../core/types';
 import { createMonster, fullHeal } from './monster';
 
 export function newGame(): GameState {
+  // スターターは2体(連戦ステージで 1対2 にならないように)
   const starter = createMonster('puni', 3, { nickname: 'ぷにきち' });
+  const partner = createMonster('rabbit', 3, { nickname: 'ぴょんた' });
   return {
     version: SAVE_VERSION,
     playerName: 'マスター',
     gold: 60,
-    party: [starter],
+    party: [starter, partner],
     farm: [],
-    items: { herb: 4, meatchunk: 2 },
+    items: { herb: 6, meatchunk: 2 },
     clearedStages: [],
     flags: {},
-    seenSpecies: ['puni'],
-    scoutedSpecies: ['puni'],
+    seenSpecies: ['puni', 'rabbit'],
+    scoutedSpecies: ['puni', 'rabbit'],
     battleCount: 0,
     synthesisCount: 0,
   };
