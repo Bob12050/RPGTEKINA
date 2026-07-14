@@ -483,9 +483,9 @@ export class BattleScene implements Scene {
     // コマンド類(縦持ちでは下側にまとめる)
     const p = isPortrait();
     if (this.phase === 'command') {
-      this.mainMenu.draw(ctx, p ? 10 : 16, p ? 420 : 210, 210, 'コマンド');
+      this.mainMenu.draw(ctx, p ? 10 : 16, p ? 348 : 210, 210, 'コマンド');
       if (this.battle.scoutBoost > 1) {
-        drawText(ctx, `ごちそう こうかちゅう! (×${this.battle.scoutBoost})`, p ? 10 : 16, p ? 392 : 180, {
+        drawText(ctx, `ごちそう こうかちゅう! (×${this.battle.scoutBoost})`, p ? 10 : 16, p ? 320 : 180, {
           color: '#ffd94a',
           font: FONT_SMALL,
         });
@@ -493,14 +493,14 @@ export class BattleScene implements Scene {
     }
     if (this.phase === 'allyAction') {
       const ally = this.currentAlly();
-      this.actionMenu.draw(ctx, p ? 10 : 16, p ? 430 : 230, 240, ally ? `${ally.name} は?` : '');
+      this.actionMenu.draw(ctx, p ? 10 : 16, p ? 358 : 230, 240, ally ? `${ally.name} は?` : '');
     }
-    if (this.phase === 'skillPick') this.skillMenu.draw(ctx, p ? 10 : 16, p ? 290 : 160, p ? view.w - 20 : 340, 'とくぎ');
-    if (this.phase === 'itemPick') this.itemMenu.draw(ctx, p ? 10 : 16, p ? 290 : 160, p ? view.w - 20 : 340, 'どうぐ');
-    if (this.phase === 'targetAlly') this.allyMenu.draw(ctx, p ? 10 : 16, p ? 340 : 200, p ? view.w - 20 : 380, 'だれに?');
+    if (this.phase === 'skillPick') this.skillMenu.draw(ctx, p ? 10 : 16, p ? 250 : 160, p ? view.w - 20 : 340, 'とくぎ');
+    if (this.phase === 'itemPick') this.itemMenu.draw(ctx, p ? 10 : 16, p ? 250 : 160, p ? view.w - 20 : 340, 'どうぐ');
+    if (this.phase === 'targetAlly') this.allyMenu.draw(ctx, p ? 10 : 16, p ? 300 : 200, p ? view.w - 20 : 380, 'だれに?');
     if (this.phase === 'targetEnemy') {
-      drawWindow(ctx, p ? 10 : 16, p ? 450 : 230, 220, 56);
-      drawText(ctx, 'どのてきに?', p ? 30 : 36, p ? 467 : 247);
+      drawWindow(ctx, p ? 10 : 16, p ? 378 : 230, 220, 56);
+      drawText(ctx, 'どのてきに?', p ? 30 : 36, p ? 395 : 247);
     }
 
     // メッセージ
@@ -554,41 +554,48 @@ export class BattleScene implements Scene {
     const current = this.phase === 'allyAction' || this.phase === 'skillPick' ? this.currentAlly() : undefined;
 
     if (isPortrait()) {
-      // 縦持ち: 全幅パネルを縦に積む
-      const w = view.w - 16;
+      // 縦持ち: 2列グリッドで積む(4体でも収まる)
+      const cols = n <= 2 ? 1 : 2;
+      const rows = Math.ceil(n / cols);
+      const gapX = 8;
+      const w = cols === 1 ? view.w - 16 : Math.floor((view.w - 16 - gapX) / 2);
       const h = 62;
+      const top = msg.y - rows * (h + 6);
       for (let i = 0; i < n; i++) {
         const unit = this.battle.allies[i]!;
-        const x = 8;
-        const y = msg.y - (n - i) * (h + 6);
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = 8 + col * (w + gapX);
+        const y = top + row * (h + 6);
         drawWindow(ctx, x, y, w, h);
         const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
-        drawText(ctx, unit.name, x + 16, y + 8, { color: nameColor, font: FONT_SMALL });
-        drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 8, { align: 'right', font: FONT_SMALL });
-        drawGauge(ctx, x + 16, y + 40, 130, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
-        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 156, y + 32, { font: FONT_SMALL });
-        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 14, y + 32, { align: 'right', font: FONT_SMALL });
-        if (current && current.id === unit.id) drawText(ctx, '▶', x + 2, y + 6, { color: '#ffd94a' });
+        drawText(ctx, unit.name, x + 12, y + 6, { color: nameColor, font: FONT_SMALL });
+        drawText(ctx, `Lv${unit.level}`, x + w - 10, y + 6, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
+        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 12, y + 28, { font: FONT_SMALL });
+        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 10, y + 28, { align: 'right', font: FONT_SMALL, color: '#8fb8f0' });
+        drawGauge(ctx, x + 12, y + 48, w - 24, 7, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
+        if (current && current.id === unit.id) drawText(ctx, '▶', x, y + 4, { color: '#ffd94a' });
       }
       return;
     }
 
-    // 横持ち: 3枚を横に並べる
-    const w = 300;
+    // 横持ち: 人数ぶん横に並べる(4体まで)
+    const gap = 12;
+    const w = Math.floor((view.w - 24 - gap * (n - 1)) / Math.max(1, n));
     const h = 92;
     const y = msg.y - h - 6;
     for (let i = 0; i < n; i++) {
       const unit = this.battle.allies[i]!;
-      const x = 12 + i * (w + 16);
+      const x = 12 + i * (w + gap);
       drawWindow(ctx, x, y, w, h);
       const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
-      drawText(ctx, `${unit.name}`, x + 16, y + 12, { color: nameColor, font: FONT_SMALL });
-      drawText(ctx, `Lv${unit.level}`, x + w - 16, y + 12, { align: 'right', font: FONT_SMALL });
-      drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 16, y + 34, { font: FONT_SMALL });
-      drawGauge(ctx, x + 150, y + 38, w - 170, 9, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
-      drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + 16, y + 58, { font: FONT_SMALL });
-      drawGauge(ctx, x + 150, y + 62, w - 170, 9, unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp, '#4a8ae8');
-      if (current && current.id === unit.id) drawText(ctx, '▶', x + 2, y + 10, { color: '#ffd94a' });
+      drawText(ctx, `${unit.name}`, x + 14, y + 10, { color: nameColor, font: FONT_SMALL });
+      drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 10, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
+      drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 14, y + 34, { font: FONT_SMALL });
+      drawGauge(ctx, x + 14, y + 56, w - 28, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
+      drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 14, y + 34, { align: 'right', font: FONT_SMALL, color: '#8fb8f0' });
+      drawGauge(ctx, x + 14, y + 70, w - 28, 6, unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp, '#4a8ae8');
+      if (current && current.id === unit.id) drawText(ctx, '▶', x + 1, y + 8, { color: '#ffd94a' });
     }
   }
 }

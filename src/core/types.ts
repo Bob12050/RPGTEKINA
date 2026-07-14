@@ -222,9 +222,9 @@ export interface GameState {
 }
 
 // ---- ゲームルール定数 ----
-export const PARTY_MAX = 3;
+export const PARTY_MAX = 4;
 export const FARM_MAX = 50;
 export const MAX_SKILLS = 6;
 export const SYNTHESIS_MIN_LEVEL = 10;
 export const MAX_LEVEL = 50;
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;

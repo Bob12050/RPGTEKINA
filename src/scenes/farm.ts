@@ -90,7 +90,7 @@ export class FarmScene implements Scene {
           }
         } else {
           if (state.party.length >= PARTY_MAX) {
-            this.messages.setPages(['パーティは 3たいまでだよ!']);
+            this.messages.setPages([`パーティは ${PARTY_MAX}たいまでだよ!`]);
             this.showingMessage = true;
           } else {
             state.farm.splice(state.farm.indexOf(m), 1);

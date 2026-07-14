@@ -1,15 +1,27 @@
 // ============================================================
-// ステージセレクト
-//   クリア状況に応じて 解放/ロック を表示し、選ぶとステージに挑戦する。
+// ステージセレクト(モンスト・ノマダン式の2階層)
+//   エリア一覧 → エリア内のクエスト一覧 → クエストに挑戦
 // ============================================================
 import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
-import { isStageUnlocked, STAGES } from '../data/stages';
-import { drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view } from '../ui/window';
+import {
+  AREAS,
+  areaProgress,
+  isAreaUnlocked,
+  isStageUnlocked,
+  questsOf,
+  type AreaDef,
+} from '../data/stages';
+import { drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
 import { StageScene } from './stage';
 
+type Phase = 'area' | 'quest';
+
 export class StageSelectScene implements Scene {
-  private menu = new Menu([], 8);
+  private phase: Phase = 'area';
+  private areaMenu = new Menu([], 8);
+  private questMenu = new Menu([], 8);
+  private currentArea: AreaDef | null = null;
 
   constructor(private app: App) {}
 
@@ -17,41 +29,80 @@ export class StageSelectScene implements Scene {
     this.app.input.flush();
   }
 
-  /** 現在のクリア状況に合わせて一覧を作り直す(解放/クリア表示のため毎フレーム) */
-  private rebuild(): void {
+  private rebuildAreas(): void {
     const state = requireState(this.app);
-    const cursor = this.menu.cursor;
-    this.menu.setItems(
-      STAGES.map((s) => {
-        const unlocked = isStageUnlocked(s, state.clearedStages);
-        const cleared = state.clearedStages.includes(s.id);
-        const mark = !unlocked ? '🔒' : cleared ? 'クリア' : `すいしょうLv${s.recLevel}`;
-        const prefix = s.postgame ? '★' : '';
+    const cursor = this.areaMenu.cursor;
+    this.areaMenu.setItems(
+      AREAS.map((a) => {
+        const unlocked = isAreaUnlocked(a.id, state.clearedStages);
+        const prog = areaProgress(a.id, state.clearedStages);
         return {
-          label: `${prefix}${unlocked ? s.name : '？？？'}`,
-          note: mark,
+          label: `${a.postgame ? '★' : ''}${unlocked ? a.name : '？？？'}`,
+          note: unlocked ? `${prog.done}/${prog.total}` : '🔒',
           disabled: !unlocked,
         };
       }),
     );
-    this.menu.setCursor(cursor);
+    this.areaMenu.setCursor(cursor);
+  }
+
+  private rebuildQuests(): void {
+    if (!this.currentArea) return;
+    const state = requireState(this.app);
+    const cursor = this.questMenu.cursor;
+    const quests = questsOf(this.currentArea.id);
+    this.questMenu.setItems(
+      quests.map((s, i) => {
+        const unlocked = isStageUnlocked(s, state.clearedStages);
+        const cleared = state.clearedStages.includes(s.id);
+        return {
+          label: `${i + 1}. ${unlocked ? s.name : '？？？'}`,
+          note: !unlocked ? '🔒' : cleared ? 'クリア' : `Lv${s.recLevel}`,
+          disabled: !unlocked,
+        };
+      }),
+    );
+    this.questMenu.setCursor(cursor);
   }
 
   update(): void {
-    this.rebuild();
+    this.rebuildAreas();
+    if (this.phase === 'quest') this.rebuildQuests();
     const key = this.app.input.poll();
     if (!key) return;
-    const r = this.menu.handleKey(key);
+
+    if (this.phase === 'area') {
+      const r = this.areaMenu.handleKey(key);
+      if (r === 'cancel') {
+        this.app.scenes.pop();
+        return;
+      }
+      if (r !== 'select') return;
+      const area = AREAS[this.areaMenu.cursor];
+      if (!area) return;
+      const state = requireState(this.app);
+      if (!isAreaUnlocked(area.id, state.clearedStages)) return;
+      this.currentArea = area;
+      this.questMenu.reset();
+      this.rebuildQuests();
+      this.phase = 'quest';
+      return;
+    }
+
+    // quest phase
+    const r = this.questMenu.handleKey(key);
     if (r === 'cancel') {
-      this.app.scenes.pop();
+      this.phase = 'area';
       return;
     }
     if (r !== 'select') return;
-    const stage = STAGES[this.menu.cursor];
-    if (!stage) return;
+    if (!this.currentArea) return;
+    const quests = questsOf(this.currentArea.id);
+    const quest = quests[this.questMenu.cursor];
+    if (!quest) return;
     const state = requireState(this.app);
-    if (!isStageUnlocked(stage, state.clearedStages)) return;
-    this.app.scenes.push(new StageScene(this.app, stage.id));
+    if (!isStageUnlocked(quest, state.clearedStages)) return;
+    this.app.scenes.push(new StageScene(this.app, quest.id));
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
@@ -61,21 +112,49 @@ export class StageSelectScene implements Scene {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, view.w, view.h);
     const p = isPortrait();
-
-    drawWindow(ctx, 12, 12, view.w - 24, 52);
-    drawText(ctx, 'ステージセレクト', view.w / 2, 26, { align: 'center', color: '#ffd94a' });
-
-    this.menu.draw(ctx, 12, 76, view.w - 24);
-
-    // 選択中ステージの説明
-    const stage = STAGES[this.menu.cursor];
     const state = requireState(this.app);
-    if (stage && isStageUnlocked(stage, state.clearedStages)) {
+
+    if (this.phase === 'area') {
+      drawWindow(ctx, 12, 12, view.w - 24, 52);
+      drawText(ctx, 'エリアせんたく', view.w / 2, 26, { align: 'center', color: '#ffd94a' });
+      this.areaMenu.draw(ctx, 12, 76, view.w - 24);
+
+      const area = AREAS[this.areaMenu.cursor];
+      if (area && isAreaUnlocked(area.id, state.clearedStages)) {
+        const dy = view.h - (p ? 120 : 130);
+        drawWindow(ctx, 12, dy, view.w - 24, p ? 106 : 110);
+        const lines = wrapText(ctx, area.desc, view.w - 80, FONT_SMALL);
+        lines.forEach((line, i) => drawText(ctx, line, 32, dy + 16 + i * 24, { font: FONT_SMALL, color: '#ccccee' }));
+        drawText(ctx, 'Z/A: クエストをみる   X/B: もどる', view.w - 32, dy + (p ? 74 : 78), {
+          align: 'right',
+          font: FONT_SMALL,
+          color: '#aaaacc',
+        });
+      }
+      return;
+    }
+
+    // quest phase
+    const area = this.currentArea!;
+    const prog = areaProgress(area.id, state.clearedStages);
+    drawWindow(ctx, 12, 12, view.w - 24, 52);
+    drawText(ctx, `${area.name}  (${prog.done}/${prog.total})`, view.w / 2, 26, { align: 'center', color: '#ffd94a' });
+    this.questMenu.draw(ctx, 12, 76, view.w - 24);
+
+    const quests = questsOf(area.id);
+    const quest = quests[this.questMenu.cursor];
+    if (quest && isStageUnlocked(quest, state.clearedStages)) {
       const dy = view.h - (p ? 110 : 130);
       drawWindow(ctx, 12, dy, view.w - 24, p ? 96 : 110);
-      drawText(ctx, stage.desc, 32, dy + 18, { font: FONT_SMALL, color: '#ccccee' });
-      drawText(ctx, `WAVE ${stage.waves.length} + ボス`, 32, dy + 48, { font: FONT_SMALL, color: '#aaaacc' });
-      drawText(ctx, 'Z/A: いどむ   X/B: もどる', view.w - 32, dy + 48, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
+      drawText(ctx, `WAVE ${quest.waves.length} + ボス  /  すいしょうLv${quest.recLevel}`, 32, dy + 18, {
+        font: FONT_SMALL,
+        color: '#ccccee',
+      });
+      drawText(ctx, 'Z/A: いどむ   X/B: エリアへもどる', view.w - 32, dy + 48, {
+        align: 'right',
+        font: FONT_SMALL,
+        color: '#aaaacc',
+      });
     }
   }
 }

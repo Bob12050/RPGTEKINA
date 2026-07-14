@@ -72,7 +72,7 @@ describe('セーブ / ロード', () => {
     expect(loadGame(2)!.gold).toBe(222);
   });
 
-  it('旧v1セーブ(フィールド探索制)を v2(ステージ制)へ移行する', () => {
+  it('旧v1セーブ(フィールド探索制)を最新(エリア/クエスト制)へ移行する', () => {
     // v1 の形: mapId/x/y/dir があり clearedStages がない。ボス撃破フラグ付き
     const legacy = {
       version: 1,
@@ -97,11 +97,28 @@ describe('セーブ / ロード', () => {
     expect(loaded!.version).toBe(SAVE_VERSION);
     // 位置情報は破棄される
     expect((loaded as unknown as Record<string, unknown>).mapId).toBeUndefined();
-    // ボス撃破済みなのでメインステージがクリア扱いになる
-    expect(loaded!.clearedStages).toContain('lair');
-    expect(loaded!.clearedStages).toContain('plains');
+    // ボス撃破済み → メインエリアの全クエストがクリア扱いになる
+    expect(loaded!.clearedStages).toContain('plains-1');
+    expect(loaded!.clearedStages).toContain('lair-2');
     // それ以外のデータは保たれる
     expect(loaded!.gold).toBe(500);
+  });
+
+  it('v2セーブ(フラットなステージID)をクエストIDへ展開して移行する', () => {
+    const v2 = {
+      ...newGame(),
+      version: 2,
+      clearedStages: ['plains', 'forest', 'trial-dragon'],
+    };
+    storage.setItem('rpgtekina_save_1', JSON.stringify(v2));
+    const loaded = loadGame();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(SAVE_VERSION);
+    expect(loaded!.clearedStages).toEqual(
+      expect.arrayContaining(['plains-1', 'plains-2', 'plains-3', 'forest-1', 'forest-2', 'forest-3', 'trial-1']),
+    );
+    // cave 系は含まれない
+    expect(loaded!.clearedStages).not.toContain('cave-1');
   });
 
   it('ボス未撃破の旧セーブは clearedStages が空で移行される', () => {

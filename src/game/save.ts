@@ -77,24 +77,35 @@ interface LegacyFields {
   dir?: string;
 }
 
+/** v2(フラットなステージID) → v3(エリア内クエストID)の対応表 */
+const V2_STAGE_TO_QUESTS: Record<string, string[]> = {
+  plains: ['plains-1', 'plains-2', 'plains-3'],
+  forest: ['forest-1', 'forest-2', 'forest-3'],
+  cave: ['cave-1', 'cave-2', 'cave-3'],
+  volcano: ['volcano-1', 'volcano-2', 'volcano-3'],
+  lair: ['lair-1', 'lair-2'],
+  'trial-dragon': ['trial-1'],
+  'trial-light': ['trial-2'],
+  'trial-god': ['trial-3'],
+};
+
 function migrate(state: GameState): GameState | null {
   if (typeof state.version !== 'number') return null;
   if (state.version > SAVE_VERSION) return null; // 未来のセーブは読めない
   if (!Array.isArray(state.party) || state.party.length === 0) return null;
 
-  // v1(フィールド探索制) → v2(ステージ制)
-  //  - clearedStages を補完(ボス撃破済みなら全メインステージをクリア扱い)
-  //  - 位置情報(mapId/x/y/dir)は破棄
-  const legacy = state as GameState & LegacyFields;
-  const migrated: GameState = {
-    ...state,
-    version: SAVE_VERSION,
-    clearedStages: Array.isArray(state.clearedStages)
-      ? state.clearedStages
-      : legacy.flags?.['clearedBoss']
-        ? ['plains', 'forest', 'cave', 'volcano', 'lair']
-        : [],
-  };
+  // v1(フィールド探索制): clearedStages が無い → ボス撃破フラグから補完
+  let cleared: string[] = Array.isArray(state.clearedStages)
+    ? [...state.clearedStages]
+    : state.flags?.['clearedBoss']
+      ? ['plains', 'forest', 'cave', 'volcano', 'lair']
+      : [];
+
+  // v2 → v3: 旧ステージIDを新クエストID群に展開(クリア済みエリアは全クエストクリア扱い)
+  cleared = [...new Set(cleared.flatMap((id) => V2_STAGE_TO_QUESTS[id] ?? [id]))];
+
+  const migrated: GameState = { ...state, version: SAVE_VERSION, clearedStages: cleared };
+  // フィールド探索時代の位置情報は破棄
   delete (migrated as GameState & LegacyFields).mapId;
   delete (migrated as GameState & LegacyFields).x;
   delete (migrated as GameState & LegacyFields).y;
