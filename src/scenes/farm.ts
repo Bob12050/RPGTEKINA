@@ -6,7 +6,7 @@ import type { Scene } from '../core/scene';
 import { FARM_MAX, PARTY_MAX } from '../core/types';
 import { monsterLabel, monsterNote } from '../ui/format';
 import { drawText, drawWindow, FONT_SMALL, Menu, MessageBox, view, isPortrait } from '../ui/window';
-import { StatusScene } from './menu';
+import { StatusScene } from './status';
 
 type Side = 'party' | 'farm';
 

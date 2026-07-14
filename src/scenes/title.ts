@@ -8,7 +8,7 @@ import { loadGame, hasSave } from '../game/save';
 import { newGame } from '../game/state';
 import { drawMonster } from '../ui/sprites';
 import { drawText, drawWindow, FONT_BIG, FONT_SMALL, Menu, view, isPortrait } from '../ui/window';
-import { FieldScene } from './field';
+import { HomeScene } from './home';
 import { HelpScene } from './help';
 
 export class TitleScene implements Scene {
@@ -32,19 +32,14 @@ export class TitleScene implements Scene {
     switch (this.menu.cursor) {
       case 0: {
         this.app.state = newGame();
-        this.app.scenes.replaceAll(
-          new FieldScene(this.app, [
-            'ぷに の「ぷにきち」が なかまに くわわった!',
-            'むらおさエルダに はなしを きいてみよう。(Zキー/Enterで はなす)',
-          ]),
-        );
+        this.app.scenes.replaceAll(new HomeScene(this.app));
         break;
       }
       case 1: {
         const loaded = loadGame();
         if (loaded) {
           this.app.state = loaded;
-          this.app.scenes.replaceAll(new FieldScene(this.app));
+          this.app.scenes.replaceAll(new HomeScene(this.app));
         }
         break;
       }

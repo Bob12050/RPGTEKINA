@@ -69,8 +69,35 @@ export function deleteSave(slot = 1): void {
   storage.removeItem(key(slot));
 }
 
+/** 旧セーブに含まれた不要フィールド(フィールド探索時代の位置情報) */
+interface LegacyFields {
+  mapId?: string;
+  x?: number;
+  y?: number;
+  dir?: string;
+}
+
 function migrate(state: GameState): GameState | null {
-  // 現状 version 1 のみ。将来ここに変換処理を足していく。
   if (typeof state.version !== 'number') return null;
-  return state.version <= SAVE_VERSION ? { ...state, version: SAVE_VERSION } : null;
+  if (state.version > SAVE_VERSION) return null; // 未来のセーブは読めない
+  if (!Array.isArray(state.party) || state.party.length === 0) return null;
+
+  // v1(フィールド探索制) → v2(ステージ制)
+  //  - clearedStages を補完(ボス撃破済みなら全メインステージをクリア扱い)
+  //  - 位置情報(mapId/x/y/dir)は破棄
+  const legacy = state as GameState & LegacyFields;
+  const migrated: GameState = {
+    ...state,
+    version: SAVE_VERSION,
+    clearedStages: Array.isArray(state.clearedStages)
+      ? state.clearedStages
+      : legacy.flags?.['clearedBoss']
+        ? ['plains', 'forest', 'cave', 'volcano', 'lair']
+        : [],
+  };
+  delete (migrated as GameState & LegacyFields).mapId;
+  delete (migrated as GameState & LegacyFields).x;
+  delete (migrated as GameState & LegacyFields).y;
+  delete (migrated as GameState & LegacyFields).dir;
+  return migrated;
 }

@@ -3,7 +3,6 @@
 // ============================================================
 import type { GameState, MonsterInstance } from '../core/types';
 import { FARM_MAX, PARTY_MAX, SAVE_VERSION } from '../core/types';
-import { START_MAP, START_X, START_Y } from '../data/maps';
 import { createMonster, fullHeal } from './monster';
 
 export function newGame(): GameState {
@@ -15,16 +14,20 @@ export function newGame(): GameState {
     party: [starter],
     farm: [],
     items: { herb: 4, meatchunk: 2 },
-    mapId: START_MAP,
-    x: START_X,
-    y: START_Y,
-    dir: 'down',
+    clearedStages: [],
     flags: {},
     seenSpecies: ['puni'],
     scoutedSpecies: ['puni'],
     battleCount: 0,
     synthesisCount: 0,
   };
+}
+
+/** ステージのクリアを記録する(重複なし)。新規クリアなら true */
+export function markStageCleared(state: GameState, stageId: string): boolean {
+  if (state.clearedStages.includes(stageId)) return false;
+  state.clearedStages.push(stageId);
+  return true;
 }
 
 /** 仲間を加える。パーティに空きがあればパーティ、なければ牧場へ */

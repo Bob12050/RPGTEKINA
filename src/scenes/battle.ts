@@ -15,9 +15,8 @@ import {
   type BattleUnit,
   type EnemySpec,
 } from '../game/battle';
-import { START_MAP, START_X, START_Y } from '../data/maps';
 import { createMonster, gainExp } from '../game/monster';
-import { addMonster, consumeItem, healParty, markScouted, markSeen } from '../game/state';
+import { addMonster, consumeItem, markScouted, markSeen } from '../game/state';
 import { drawMonster } from '../ui/sprites';
 import {
   drawGauge,
@@ -27,7 +26,18 @@ import {
   hpColor,
   Menu,
   MessageBox, view, isPortrait } from '../ui/window';
-import { FieldScene } from './field';
+
+/** 最終ボス。撃破で世界に平和が訪れる(専用演出) */
+const FINAL_BOSS_ID = 'tekina';
+
+export interface BattleOptions {
+  /** ボス戦(演出強化・逃走不可) */
+  isBoss?: boolean;
+  /** にげるコマンドを出すか(ボスや連戦の演出で変える) */
+  allowFlee?: boolean;
+  /** 戦闘終了時に結果を返す(ステージ進行の制御に使う) */
+  onComplete: (result: BattleResult) => void;
+}
 
 type Phase =
   | 'playback'
@@ -54,8 +64,11 @@ function msgRect(): { x: number; y: number; w: number; h: number } {
 
 export class BattleScene implements Scene {
   private battle: Battle;
+  private isBoss: boolean;
+  private allowFlee: boolean;
+  private onComplete: (result: BattleResult) => void;
   private phase: Phase = 'playback';
-  private mainMenu = new Menu([{ label: 'たたかう' }, { label: 'スカウト' }, { label: 'どうぐ' }, { label: 'にげる' }]);
+  private mainMenu: Menu;
   private actionMenu = new Menu([{ label: 'こうげき' }, { label: 'とくぎ' }, { label: 'ぼうぎょ' }]);
   private skillMenu = new Menu([]);
   private itemMenu = new Menu([]);
@@ -75,16 +88,24 @@ export class BattleScene implements Scene {
   constructor(
     private app: App,
     enemySpecs: EnemySpec[],
-    private isBoss: boolean,
+    opts: BattleOptions,
   ) {
+    this.isBoss = opts.isBoss ?? false;
+    this.allowFlee = opts.allowFlee ?? true;
+    this.onComplete = opts.onComplete;
+    // にげるはボス戦や逃走不可の連戦では出さない
+    const commands = [{ label: 'たたかう' }, { label: 'スカウト' }, { label: 'どうぐ' }];
+    if (this.allowFlee && !this.isBoss) commands.push({ label: 'にげる' });
+    this.mainMenu = new Menu(commands);
+
     const state = requireState(app);
-    this.battle = new Battle(state.party, enemySpecs, isBoss);
+    this.battle = new Battle(state.party, enemySpecs, this.isBoss);
     state.battleCount += 1;
     // ずかんの「はっけん」登録(ボス戦も含めてここで確実に記録する)
     for (const spec of enemySpecs) markSeen(state, spec.speciesId);
     const names = [...new Set(this.battle.enemies.map((e) => getSpecies(e.speciesId).name))];
     const intro: BattleEvent[] = this.isBoss
-      ? [{ type: 'message', text: 'まりゅうテキーナが たちはだかった!!' }]
+      ? [{ type: 'message', text: `${names.join(' と ')}が たちはだかった!!` }]
       : [{ type: 'message', text: `${names.join(' と ')}が とびだしてきた!` }];
     this.eventQueue.push(...intro);
   }
@@ -412,34 +433,25 @@ export class BattleScene implements Scene {
           }
         }
       }
-      if (this.isBoss && result === 'win' && !state.flags['clearedBoss']) {
+      // 最終ボス(まりゅうテキーナ)撃破で世界に平和が訪れる
+      const beatFinalBoss = this.battle.enemies.some((e) => e.speciesId === FINAL_BOSS_ID);
+      if (result === 'win' && beatFinalBoss && !state.flags['clearedBoss']) {
         state.flags['clearedBoss'] = true;
         push('まりゅうテキーナを うちたおした!!');
         push('せかいに へいわが おとずれた… あなたは しんの モンスターマスターだ!');
-        push('(クリアごも ぼうけんは つづく。きんだんの はいごうレシピの うわさも…?)');
+        push('(クリアごも ぼうけんは つづく。しれんの ステージが かいほうされた!)');
       }
     } else if (result === 'lose') {
-      state.gold = Math.floor(state.gold / 2);
-      push('しょじきんが はんぶんに なってしまった…');
+      push('パーティは ぜんめつしてしまった…');
     }
     this.postDone = true;
   }
 
   private exitBattle(): void {
-    const state = requireState(this.app);
-    // syncBack は queuePostBattle で実行済み。ここで再実行すると
-    // レベルアップ時のHP/MP回復(gainExp)を巻き戻してしまうので呼ばない。
-    if (this.result === 'lose') {
-      healParty(state);
-      state.mapId = START_MAP;
-      state.x = START_X;
-      state.y = START_Y;
-      this.app.scenes.replaceAll(
-        new FieldScene(this.app, ['めのまえが まっくらに なった…。', 'きがつくと むらに もどっていた。']),
-      );
-      return;
-    }
+    // syncBack は queuePostBattle で実行済み(再実行するとレベルアップ回復を巻き戻すため呼ばない)。
+    // 勝敗の処理・シーン遷移はステージ側(onComplete)に委ねる。
     this.app.scenes.pop();
+    this.onComplete(this.result!);
   }
 
   // ==================== 描画 ====================

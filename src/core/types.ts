@@ -211,10 +211,8 @@ export interface GameState {
   party: MonsterInstance[];
   farm: MonsterInstance[];
   items: Record<string, number>;
-  mapId: string;
-  x: number;
-  y: number;
-  dir: Dir;
+  /** クリア済みステージのID一覧(ステージ解放の判定に使う) */
+  clearedStages: string[];
   flags: Record<string, boolean>;
   /** 図鑑: 見つけた/仲間にした種族 */
   seenSpecies: string[];
@@ -229,4 +227,4 @@ export const FARM_MAX = 50;
 export const MAX_SKILLS = 6;
 export const SYNTHESIS_MIN_LEVEL = 10;
 export const MAX_LEVEL = 50;
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
