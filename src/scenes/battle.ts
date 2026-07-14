@@ -15,8 +15,8 @@ import {
   type BattleUnit,
   type EnemySpec,
 } from '../game/battle';
-import { createMonster, gainExp } from '../game/monster';
-import { addMonster, consumeItem, markScouted, markSeen } from '../game/state';
+import { gainExp } from '../game/monster';
+import { consumeItem, markSeen } from '../game/state';
 import { drawMonster } from '../ui/sprites';
 import {
   drawGauge,
@@ -50,7 +50,6 @@ type Phase =
 type TargetContext =
   | { mode: 'attack' }
   | { mode: 'skill'; skillId: string }
-  | { mode: 'scout' }
   | { mode: 'item'; itemId: string };
 
 /** メッセージウィンドウの位置(画面の向きで変わるため毎回計算) */
@@ -64,7 +63,7 @@ export class BattleScene implements Scene {
   private battle: Battle;
   private onComplete: (result: BattleResult) => void;
   private phase: Phase = 'playback';
-  private mainMenu = new Menu([{ label: 'たたかう' }, { label: 'スカウト' }, { label: 'どうぐ' }, { label: 'にげる' }]);
+  private mainMenu = new Menu([{ label: 'たたかう' }, { label: 'どうぐ' }, { label: 'にげる' }]);
   private actionMenu = new Menu([{ label: 'こうげき' }, { label: 'とくぎ' }, { label: 'ぼうぎょ' }]);
   private skillMenu = new Menu([]);
   private itemMenu = new Menu([]);
@@ -140,16 +139,11 @@ export class BattleScene implements Scene {
             this.currentAllyIdx = 0;
             this.advanceToNextAlly(true);
             break;
-          case 1: // スカウト
-            this.targetCtx = { mode: 'scout' };
-            this.targetIdx = 0;
-            this.phase = 'targetEnemy';
-            break;
-          case 2: // どうぐ
+          case 1: // どうぐ
             this.buildItemMenu();
             this.phase = 'itemPick';
             break;
-          case 3: // にげる
+          case 2: // にげる
             this.runTurn({ kind: 'flee' });
             break;
         }
@@ -232,14 +226,9 @@ export class BattleScene implements Scene {
         const itemId = ids[this.itemMenu.cursor];
         if (!itemId) return;
         const item = getItem(itemId);
-        if (item.effect.kind === 'scoutBoost') {
-          consumeItem(state, itemId);
-          this.runTurn({ kind: 'item', itemId });
-        } else {
-          this.targetCtx = { mode: 'item', itemId };
-          this.buildAllyMenu(item.effect.kind === 'revive');
-          this.phase = 'targetAlly';
-        }
+        this.targetCtx = { mode: 'item', itemId };
+        this.buildAllyMenu(item.effect.kind === 'revive');
+        this.phase = 'targetAlly';
         break;
       }
       case 'targetEnemy': {
@@ -248,13 +237,11 @@ export class BattleScene implements Scene {
         if (key === 'left' || key === 'up') this.targetIdx = (this.targetIdx - 1 + targets.length) % targets.length;
         else if (key === 'right' || key === 'down') this.targetIdx = (this.targetIdx + 1) % targets.length;
         else if (key === 'cancel') {
-          this.phase = this.targetCtx.mode === 'scout' ? 'command' : this.targetCtx.mode === 'skill' ? 'skillPick' : 'allyAction';
+          this.phase = this.targetCtx.mode === 'skill' ? 'skillPick' : 'allyAction';
         } else if (key === 'confirm') {
           const target = targets[Math.min(this.targetIdx, targets.length - 1)];
           if (!target) return;
-          if (this.targetCtx.mode === 'scout') {
-            this.runTurn({ kind: 'scout', targetId: target.id });
-          } else if (this.targetCtx.mode === 'skill') {
+          if (this.targetCtx.mode === 'skill') {
             this.setAllyAction({ kind: 'skill', skillId: this.targetCtx.skillId, targetId: target.id });
           } else {
             this.setAllyAction({ kind: 'attack', targetId: target.id });
@@ -361,10 +348,6 @@ export class BattleScene implements Scene {
         case 'attackAnim':
           this.shake = { unitId: ev.unitId, t: 0.25 };
           break;
-        case 'scoutAttempt':
-          this.messages.setPages([`(せいこうりつ ${ev.rate.toFixed(0)}% …!)`]);
-          this.waitingMessage = true;
-          return;
         case 'hpChange':
         case 'mpChange':
         case 'ko':
@@ -393,19 +376,6 @@ export class BattleScene implements Scene {
     const state = requireState(this.app);
     const push = (text: string) => this.eventQueue.push({ type: 'message', text });
     this.battle.syncBack();
-
-    // スカウトした仲間は 勝利/逃走なら合流する(全滅時は置きざりに…)
-    if (result !== 'lose') {
-      for (const e of this.battle.scoutedEnemies) {
-        const sp = getSpecies(e.speciesId);
-        const joined = createMonster(e.speciesId, e.level);
-        markScouted(state, e.speciesId);
-        const where = addMonster(state, joined);
-        if (where === 'party') push(`${sp.name}が パーティに くわわった!`);
-        else if (where === 'farm') push(`${sp.name}は ぼくじょうに おくられた!`);
-        else push(`しかし ぼくじょうが いっぱいで ${sp.name}は かえっていった…。`);
-      }
-    }
 
     if (result === 'win') {
       const { exp, gold } = this.battle.rewards;
@@ -484,12 +454,6 @@ export class BattleScene implements Scene {
     const p = isPortrait();
     if (this.phase === 'command') {
       this.mainMenu.draw(ctx, p ? 10 : 16, p ? 348 : 210, 210, 'コマンド');
-      if (this.battle.scoutBoost > 1) {
-        drawText(ctx, `ごちそう こうかちゅう! (×${this.battle.scoutBoost})`, p ? 10 : 16, p ? 320 : 180, {
-          color: '#ffd94a',
-          font: FONT_SMALL,
-        });
-      }
     }
     if (this.phase === 'allyAction') {
       const ally = this.currentAlly();

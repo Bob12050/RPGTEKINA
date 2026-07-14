@@ -5,6 +5,9 @@ import type { GameState, MonsterInstance } from '../core/types';
 import { FARM_MAX, PARTY_MAX, SAVE_VERSION } from '../core/types';
 import { createMonster, fullHeal } from './monster';
 
+/** はじめから遊ぶとき最初に持っているオーブ(チュートリアル10連ぶん+α) */
+export const STARTING_ORBS = 50;
+
 export function newGame(): GameState {
   // スターターは2体(連戦ステージで 1対2 にならないように)
   const starter = createMonster('puni', 3, { nickname: 'ぷにきち' });
@@ -13,15 +16,15 @@ export function newGame(): GameState {
     version: SAVE_VERSION,
     playerName: 'マスター',
     gold: 60,
+    orbs: STARTING_ORBS,
     party: [starter, partner],
     farm: [],
-    items: { herb: 6, meatchunk: 2 },
+    items: { herb: 6 },
     clearedStages: [],
     flags: {},
     seenSpecies: ['puni', 'rabbit'],
     scoutedSpecies: ['puni', 'rabbit'],
     battleCount: 0,
-    synthesisCount: 0,
   };
 }
 
@@ -75,6 +78,7 @@ export function markSeen(state: GameState, speciesId: string): void {
   if (!state.seenSpecies.includes(speciesId)) state.seenSpecies.push(speciesId);
 }
 
+/** 「なかまにした」を図鑑に記録する(フィールド名はセーブ互換のため scoutedSpecies のまま) */
 export function markScouted(state: GameState, speciesId: string): void {
   markSeen(state, speciesId);
   if (!state.scoutedSpecies.includes(speciesId)) state.scoutedSpecies.push(speciesId);

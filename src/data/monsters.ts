@@ -1,6 +1,6 @@
 // ============================================================
-// モンスター図鑑データ(全52種)
-// 新モンスターはここに追加するだけでOK。
+// モンスター図鑑データ(全70種)
+// 新モンスターはここに追加するだけでOK。ランクがそのままガチャのレア度になる。
 // テスト(tests/data.test.ts)が learnset の参照整合性などを自動チェックする。
 // ============================================================
 import type { Family, Rank, SpeciesDef, Stats } from '../core/types';
@@ -11,8 +11,6 @@ function toStats(a: StatArray): Stats {
   return { hp: a[0], mp: a[1], atk: a[2], def: a[3], agi: a[4], wis: a[5] };
 }
 
-// 低ランクほどスカウトしやすく(序盤の成功率を体感25〜50%に)
-const DEFAULT_SCOUT: Record<Rank, number> = { F: 0.55, E: 0.75, D: 1.05, C: 1.7, B: 2.2, A: 3.0, S: 4.0 };
 const DEFAULT_EXP: Record<Rank, number> = { F: 5, E: 9, D: 16, C: 30, B: 55, A: 95, S: 200 };
 const DEFAULT_GOLD: Record<Rank, number> = { F: 4, E: 7, D: 13, C: 24, B: 45, A: 80, S: 160 };
 
@@ -25,7 +23,6 @@ interface SpeciesInput {
   growth: StatArray;
   learnset?: [level: number, skillId: string][];
   resist?: SpeciesDef['resist'];
-  scout?: number;
   exp?: number;
   gold?: number;
   palette: [string, string, string];
@@ -42,7 +39,6 @@ function species(s: SpeciesInput): SpeciesDef {
     growth: toStats(s.growth),
     learnset: (s.learnset ?? []).map(([level, skillId]) => ({ level, skillId })),
     resist: s.resist ?? {},
-    scoutDifficulty: s.scout ?? DEFAULT_SCOUT[s.rank],
     expYield: s.exp ?? DEFAULT_EXP[s.rank],
     goldYield: s.gold ?? DEFAULT_GOLD[s.rank],
     palette: s.palette,
@@ -92,7 +88,7 @@ export const SPECIES: SpeciesDef[] = [
     base: [12, 20, 25, 90, 70, 30], growth: [1.2, 2.0, 3.0, 8.0, 5.0, 3.5],
     learnset: [[1, 'spark'], [10, 'lightning']],
     resist: { fire: 0.5, ice: 0.5, thunder: 0.5, wind: 0.5, dark: 0.5, holy: 0.5 },
-    scout: 5.0, exp: 350, gold: 30,
+    exp: 350, gold: 30,
     palette: ['#c9ced8', '#8a93a5', '#f2f5fa'],
     desc: 'ぜんしんが きんぞくの まぼろしの ぷに。たおせば ばくだいな けいけんちが!',
   }),
@@ -156,7 +152,7 @@ export const SPECIES: SpeciesDef[] = [
     base: [190, 60, 62, 50, 38, 40], growth: [17, 4.0, 6.5, 5.5, 4.0, 4.5],
     learnset: [[1, 'scorch'], [1, 'darknebula'], [20, 'inferno'], [35, 'gigavolt']],
     resist: { fire: 0.5, ice: 0.5, thunder: 0.5, dark: 0.5 },
-    scout: 0, exp: 800, gold: 500,
+    exp: 800, gold: 500,
     palette: ['#8a3df0', '#4a1a99', '#f05a3d'],
     desc: 'かざんの おくふかくに ひそむ でんせつの まりゅう。せかいを ほろぼす ちからを もつ。',
   }),
@@ -439,7 +435,7 @@ export const SPECIES: SpeciesDef[] = [
     desc: 'ダイヤモンドの からだを もつ きゅうきょくの ゴーレム。その かがやきは えいえんに。',
   }),
 
-  // ================= ？？？系(配合限定) =================
+  // ================= ？？？系(超レア) =================
   species({
     id: 'unicorn', name: 'ユニコーン', family: 'mystic', rank: 'B',
     base: [72, 30, 32, 26, 34, 34], growth: [9.5, 3.2, 4.4, 3.6, 4.6, 4.4],
@@ -466,46 +462,40 @@ export const SPECIES: SpeciesDef[] = [
   }),
 
   // ============================================================
-  // 配合でしか生まれない でんせつの モンスターたち
-  //   scout: 0 → 野良に出ず、通常配合の抽選からも外れる = 特殊レシピ専用
-  //   B → A → S の3段。中間種がさらに上位の素材になる「配合ツリー」を形成する
-  //   レシピは data/synthesis.ts の SPECIAL_RECIPES で定義
+  // でんせつの モンスターたち(ガチャの高レア枠)
+  //   B → A → S の順に レア度と つよさが 上がっていく
   // ============================================================
 
-  // ---- Bランク(下位・野良の素材から作れる入口) ----
+  // ---- Bランク(★5) ----
   species({
     id: 'caitsith', name: 'ケットシー', family: 'beast', rank: 'B',
     base: [70, 26, 30, 24, 40, 26], growth: [9, 3.0, 4.2, 3.2, 5.2, 3.4],
     learnset: [[1, 'bite'], [8, 'speedsong'], [16, 'powerup'], [26, 'rush']],
-    scout: 0,
     palette: ['#7a5ad6', '#4a3399', '#f0e0c2'],
-    desc: 'ながぐつを はいた ようせいの ねこ。すばやさは ぐんを ぬく。はいごうでしか であえない。',
+    desc: 'ながぐつを はいた ようせいの ねこ。すばやさは ぐんを ぬく。であえたら ラッキー。',
   }),
   species({
     id: 'basilisk', name: 'バジリスク', family: 'demon', rank: 'B',
     base: [80, 22, 34, 30, 24, 22], growth: [10, 2.6, 4.6, 4.0, 3.2, 2.8],
     learnset: [[1, 'shadow'], [10, 'weaken'], [18, 'slow'], [26, 'darknebula']],
-    scout: 0,
     resist: { dark: 0.5, holy: 1.5 },
     palette: ['#4a8c3d', '#2a5a1c', '#c2f03d'],
-    desc: 'みたものを いしに かえる まがんの へび。はいごうから しか うまれない。',
+    desc: 'みたものを いしに かえる まがんの へび。めったに すがたを みせない。',
   }),
   species({
     id: 'pegasus', name: 'ペガサス', family: 'mystic', rank: 'B',
     base: [76, 30, 32, 28, 38, 32], growth: [9.5, 3.2, 4.4, 3.6, 5.0, 4.0],
     learnset: [[1, 'windcutter'], [10, 'holyray'], [20, 'speedsong'], [30, 'tempest']],
-    scout: 0,
     resist: { holy: 0.5, wind: 0.5 },
     palette: ['#f5f8ff', '#a5c9f0', '#7ae0ff'],
     desc: 'しろい つばさで てんくうを かける せいなる うま。おおくの でんせつしゅの おやとなる。',
   }),
 
-  // ---- Aランク(中位・Bランク配合種 + 野良から) ----
+  // ---- Aランク(★6) ----
   species({
     id: 'chimera', name: 'キマイラ', family: 'demon', rank: 'A',
     base: [110, 26, 48, 36, 34, 22], growth: [12.5, 2.6, 5.8, 4.6, 4.4, 2.8],
     learnset: [[1, 'flamebreath'], [12, 'bite'], [22, 'scorch'], [32, 'rush']],
-    scout: 0,
     resist: { fire: 0.5 },
     palette: ['#c23d3d', '#7a1c1c', '#f0a53d'],
     desc: 'いくつもの けものを つぎはぎに した まじゅう。くちから ほのおを はく。',
@@ -514,7 +504,6 @@ export const SPECIES: SpeciesDef[] = [
     id: 'hydra', name: 'ヒュドラ', family: 'dragon', rank: 'A',
     base: [118, 28, 46, 38, 30, 26], growth: [13.5, 2.8, 5.6, 4.8, 3.6, 3.2],
     learnset: [[1, 'icebreath'], [12, 'flamebreath'], [24, 'whiteout'], [34, 'scorch']],
-    scout: 0,
     resist: { fire: 0.5, ice: 0.5 },
     palette: ['#3d7a5a', '#1c4a33', '#8a3df0'],
     desc: 'きゅうつの くびを もつ どくりゅう。くびを きられても すぐに はえてくる。',
@@ -523,7 +512,6 @@ export const SPECIES: SpeciesDef[] = [
     id: 'griffin', name: 'グリフォン', family: 'mystic', rank: 'A',
     base: [108, 26, 46, 36, 42, 26], growth: [12.5, 2.6, 5.6, 4.6, 5.4, 3.2],
     learnset: [[1, 'windcutter'], [12, 'rush'], [22, 'tempest'], [32, 'speedsong']],
-    scout: 0,
     resist: { wind: 0.5 },
     palette: ['#e8b93d', '#a8781a', '#f5ead8'],
     desc: 'ししの からだと わしの つばさを もつ れいじゅう。そらの おうじゃ。',
@@ -532,7 +520,6 @@ export const SPECIES: SpeciesDef[] = [
     id: 'sphinx', name: 'スフィンクス', family: 'mystic', rank: 'A',
     base: [104, 40, 40, 36, 32, 44], growth: [12, 4.2, 5.0, 4.6, 3.8, 5.4],
     learnset: [[1, 'lightning'], [12, 'holyray'], [22, 'gigavolt'], [32, 'healall']],
-    scout: 0,
     resist: { thunder: 0.5, holy: 0.5 },
     palette: ['#f0d43d', '#b5851a', '#e8d5a0'],
     desc: 'なぞかけを だす いにしえの しんじゅう。こたえられぬ ものに ばつを あたえる。',
@@ -541,7 +528,6 @@ export const SPECIES: SpeciesDef[] = [
     id: 'valkyrie', name: 'ヴァルキリー', family: 'mystic', rank: 'A',
     base: [106, 36, 46, 38, 40, 34], growth: [12.5, 3.6, 5.6, 4.8, 5.0, 4.2],
     learnset: [[1, 'holyray'], [12, 'powerup'], [22, 'healall'], [32, 'revive']],
-    scout: 0,
     resist: { holy: 0.5, dark: 0.5 },
     palette: ['#c9d8f0', '#6b8cb0', '#f0d43d'],
     desc: 'せんじょうに まいおりる せんの おとめ。ゆうしゃの たましいを てんへ みちびく。',
@@ -550,18 +536,17 @@ export const SPECIES: SpeciesDef[] = [
     id: 'metaldra', name: 'こうてつりゅうメタルドラ', family: 'material', rank: 'A',
     base: [115, 20, 44, 56, 20, 20], growth: [13, 2.2, 5.4, 6.6, 2.6, 2.6],
     learnset: [[1, 'flamebreath'], [12, 'boulder'], [24, 'scorch'], [34, 'guardsong']],
-    scout: 0,
     resist: { fire: 0.5, ice: 0.5, thunder: 1.5 },
     palette: ['#8a93a5', '#4a525f', '#c9ced8'],
     desc: 'くろがねの きょじんに りゅうの たましいを やどした もの。まもりは てっぺき。',
   }),
 
-  // ---- Sランク(最上位・Aランク配合種どうし などから) ----
+  // ---- Sランク(★7) ----
   species({
     id: 'bahamut', name: 'りゅうおうバハムート', family: 'dragon', rank: 'S',
     base: [185, 55, 64, 52, 40, 44], growth: [17, 4.5, 6.6, 5.6, 4.2, 4.8],
     learnset: [[1, 'scorch'], [15, 'gigavolt'], [25, 'inferno'], [35, 'whiteout']],
-    scout: 0, exp: 750, gold: 450,
+    exp: 750, gold: 450,
     resist: { fire: 0.5, ice: 0.5, thunder: 0.5 },
     palette: ['#3d5ac2', '#1c2f7a', '#c9d8ff'],
     desc: 'すべての りゅうを したがえる りゅうの おう。そのいぶきは てんちを さく。',
@@ -570,7 +555,7 @@ export const SPECIES: SpeciesDef[] = [
     id: 'leviathan', name: 'かいりゅうレヴィアタン', family: 'dragon', rank: 'S',
     base: [195, 50, 58, 54, 42, 46], growth: [17.5, 4.2, 6.2, 5.8, 4.4, 5.0],
     learnset: [[1, 'whiteout'], [15, 'blizzara'], [25, 'tempest'], [35, 'gigavolt']],
-    scout: 0, exp: 750, gold: 450,
+    exp: 750, gold: 450,
     resist: { ice: 0, fire: 1.5, thunder: 0.5 },
     palette: ['#1c6b8c', '#0d3d5a', '#6ee7ff'],
     desc: 'ふかい うみの そこに ねむる きょだいな かいりゅう。つなみを おこして すべてを のみこむ。',
@@ -579,7 +564,7 @@ export const SPECIES: SpeciesDef[] = [
     id: 'behemoth', name: 'きょじゅうベヒーモス', family: 'beast', rank: 'S',
     base: [210, 30, 66, 50, 34, 24], growth: [18, 3.0, 7.0, 5.6, 4.0, 3.0],
     learnset: [[1, 'boulder'], [15, 'rush'], [25, 'powerup'], [35, 'scorch']],
-    scout: 0, exp: 750, gold: 450,
+    exp: 750, gold: 450,
     resist: { thunder: 0.5 },
     palette: ['#5c3d26', '#331f13', '#c23d3d'],
     desc: 'だいちを ゆるがして あるく きょだいな まじゅう。その あしおとは じしんの ごとし。',
@@ -588,7 +573,7 @@ export const SPECIES: SpeciesDef[] = [
     id: 'seraphim', name: 'だいてんしセラフ', family: 'mystic', rank: 'S',
     base: [170, 60, 56, 48, 50, 58], growth: [16.5, 5.5, 6.2, 5.4, 5.6, 6.4],
     learnset: [[1, 'holyray'], [15, 'healall'], [25, 'gigavolt'], [35, 'revive']],
-    scout: 0, exp: 750, gold: 450,
+    exp: 750, gold: 450,
     resist: { holy: 0, dark: 0.5 },
     palette: ['#fffef0', '#ffe97a', '#f0f5ff'],
     desc: 'むっつの つばさを もつ さいこういの てんし。せいなる ひかりで あくを ほろぼす。',
@@ -597,22 +582,21 @@ export const SPECIES: SpeciesDef[] = [
     id: 'metalking', name: 'メタルキング', family: 'material', rank: 'S',
     base: [160, 25, 55, 72, 22, 24], growth: [15.5, 2.6, 6.2, 8.0, 2.4, 3.0],
     learnset: [[1, 'boulder'], [12, 'holyray'], [24, 'guardsong'], [36, 'gigavolt']],
-    scout: 0, exp: 900, gold: 600,
+    exp: 900, gold: 600,
     resist: { fire: 0.5, ice: 0.5, thunder: 0.5, wind: 0.5, dark: 0.5, holy: 0.5 },
     palette: ['#c9ced8', '#7a8394', '#f2f5fa'],
     desc: 'きんぞくの モンスターたちの おうさま。おうかんと たてに つつまれた てっぺきの まもり。',
   }),
 
   // ============================================================
-  // 隠し究極モンスター(神クラス)
-  //   Sランクの配合限定種どうしからのみ生まれる最深層。ゲーム最強格。
-  //   到達には おおくの 多段配合が ひつよう(かくれレシピ)
+  // 究極モンスター(神クラス)
+  //   ガチャの さいこうレア枠 & しれんクエストの ボスとして登場。ゲーム最強格
   // ============================================================
   species({
     id: 'odin', name: 'しんおうオーディン', family: 'mystic', rank: 'S',
     base: [230, 72, 66, 56, 58, 70], growth: [19, 5.5, 6.5, 5.5, 5.8, 6.8],
     learnset: [[1, 'gigavolt'], [12, 'healall'], [24, 'darknebula'], [36, 'revive']],
-    scout: 0, exp: 1400, gold: 900,
+    exp: 1400, gold: 900,
     resist: { holy: 0, dark: 0.5, thunder: 0.5, ice: 0.5 },
     palette: ['#f0e6c2', '#b59a4a', '#7ac2ff'],
     desc: 'かみがみを したがえる てんくうの おう。かために せかいの すべてが うつる という。',
@@ -621,7 +605,7 @@ export const SPECIES: SpeciesDef[] = [
     id: 'vritra', name: 'りゅうしんヴリトラ', family: 'dragon', rank: 'S',
     base: [255, 60, 74, 62, 50, 52], growth: [20, 4.8, 7.2, 6.2, 5.0, 5.5],
     learnset: [[1, 'inferno'], [12, 'whiteout'], [24, 'gigavolt'], [36, 'scorch']],
-    scout: 0, exp: 1400, gold: 900,
+    exp: 1400, gold: 900,
     resist: { fire: 0.5, ice: 0.5, thunder: 0.5, dark: 0.5 },
     palette: ['#6b2ab0', '#3a1266', '#f05a3d'],
     desc: 'てんちそうぞうの ときから いきる りゅうの かみ。ひとふりで やまを けずる。',
@@ -630,7 +614,7 @@ export const SPECIES: SpeciesDef[] = [
     id: 'gaia', name: 'だいちしんガイア', family: 'beast', rank: 'S',
     base: [275, 45, 78, 64, 46, 42], growth: [21, 3.5, 7.4, 6.4, 4.6, 4.2],
     learnset: [[1, 'boulder'], [12, 'tempest'], [24, 'healall'], [36, 'scorch']],
-    scout: 0, exp: 1400, gold: 900,
+    exp: 1400, gold: 900,
     resist: { wind: 0.5, ice: 0.5, fire: 0.5 },
     palette: ['#4a8c3d', '#2a5a22', '#e8b93d'],
     desc: 'だいちそのものが いしを もった きょじゅう。その こどうは せかいの みゃくどう。',
@@ -639,7 +623,7 @@ export const SPECIES: SpeciesDef[] = [
     id: 'omega', name: 'きゅうきょくオメガ', family: 'material', rank: 'S',
     base: [225, 40, 68, 90, 30, 42], growth: [18, 3.0, 6.6, 8.4, 3.2, 4.0],
     learnset: [[1, 'gigavolt'], [12, 'boulder'], [24, 'guardsong'], [36, 'whiteout']],
-    scout: 0, exp: 1600, gold: 1000,
+    exp: 1600, gold: 1000,
     resist: { fire: 0.5, ice: 0.5, thunder: 0.5, wind: 0.5, dark: 0.5, holy: 0.5 },
     palette: ['#d8e0ea', '#8a95a8', '#6ee7ff'],
     desc: 'こだいぶんめいが のこした きゅうきょくの へいき。すべてを むこうかする てっぺきの よろい。',

@@ -24,6 +24,11 @@ describe('ゲーム状態', () => {
     expect(state.scoutedSpecies).toContain('rabbit');
   });
 
+  it('はじめから10連ガチャを1回まわせるオーブを持っている', () => {
+    const state = newGame();
+    expect(state.orbs).toBeGreaterThanOrEqual(45);
+  });
+
   it('パーティが満員なら牧場へ送られる', () => {
     const state = newGame(); // スターター1体が既にいる
     while (state.party.length < PARTY_MAX) addMonster(state, createMonster('wolf', 5));

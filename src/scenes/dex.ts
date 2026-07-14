@@ -6,12 +6,22 @@
 import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
 import type { SpeciesDef } from '../core/types';
-import { ELEMENT_NAMES, FAMILY_NAMES } from '../core/types';
+import { ELEMENT_NAMES, FAMILY_NAMES, rankStars } from '../core/types';
 import { getSkill } from '../data/skills';
-import { getSpecies, SPECIES } from '../data/monsters';
-import { recipesForChild } from '../data/synthesis';
+import { SPECIES } from '../data/monsters';
+import { inGachaPool } from '../data/gacha';
+import { STAGES } from '../data/stages';
 import { drawGridSprite, drawMonster, FAMILY_SPRITES } from '../ui/sprites';
 import { drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
+
+/** 入手ヒント: ガチャ排出か、クエストドロップか */
+function obtainHint(speciesId: string): string | null {
+  if (inGachaPool(speciesId)) return 'ガチャで なかまに できる';
+  if (STAGES.some((s) => s.monsterDrops?.some((md) => md.speciesId === speciesId))) {
+    return 'クエストの ドロップで なかまに';
+  }
+  return null;
+}
 
 type Knowledge = 'unknown' | 'seen' | 'scouted';
 
@@ -89,7 +99,6 @@ export class DexScene implements Scene {
     drawWindow(ctx, x, y, w, h);
     const sp: SpeciesDef | undefined = SPECIES[this.menu.cursor];
     if (!sp) return;
-    const state = requireState(this.app);
     const k = this.knowledge(sp.id);
     const p = isPortrait();
     const scale = p ? 5 : 6;
@@ -118,31 +127,17 @@ export class DexScene implements Scene {
 
     const tx = sx + size + 22;
     drawText(ctx, k === 'scouted' ? sp.name : `${sp.name} (シルエット)`, tx, y + 30, { font: p ? FONT_SMALL : undefined });
-    drawText(ctx, `${FAMILY_NAMES[sp.family]}・ランク${sp.rank}`, tx, y + (p ? 58 : 66), {
+    drawText(ctx, `${FAMILY_NAMES[sp.family]}・${'★'.repeat(rankStars(sp.rank))}`, tx, y + (p ? 58 : 66), {
       font: FONT_SMALL,
       color: '#aaaacc',
     });
-    if (sp.scoutDifficulty <= 0) {
-      drawText(ctx, 'はいごうで なかまに', tx, y + (p ? 82 : 94), { font: FONT_SMALL, color: '#8fd4ff' });
+    const hint = obtainHint(sp.id);
+    if (hint) {
+      drawText(ctx, hint, tx, y + (p ? 82 : 94), { font: FONT_SMALL, color: '#8fd4ff' });
     }
 
-    // 下段の描画開始位置。逆引きレシピがあれば先に表示する
+    // 下段の描画開始位置
     let ly = y + size + 44;
-
-    // ---- 逆引きレシピ: この種を生む はいごう(未発見の親は ??? でマスク) ----
-    const recipes = recipesForChild(sp.id);
-    if (recipes.length > 0) {
-      const r = recipes[0]!;
-      const pname = (id: string) => (state.seenSpecies.includes(id) ? getSpecies(id).name : '？？？');
-      drawText(ctx, 'はいごうレシピ', x + 24, ly, { font: FONT_SMALL, color: '#ffd94a' });
-      ly += 26;
-      const line = `${pname(r.parents[0])} × ${pname(r.parents[1])}`;
-      for (const seg of wrapText(ctx, line, w - 48, FONT_SMALL)) {
-        drawText(ctx, seg, x + 24, ly, { font: FONT_SMALL, color: '#8fd4ff' });
-        ly += 24;
-      }
-      ly += 10;
-    }
 
     if (k === 'seen') {
       const msg = wrapText(ctx, 'なかまに すれば くわしい じょうほうが わかる!', w - 48, FONT_SMALL);

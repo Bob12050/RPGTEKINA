@@ -1,6 +1,6 @@
 // ============================================================
 // ホーム(きょてん)シーン — 完全ステージ制の中心メニュー
-//   ぼうけん(ステージ)へ行くほか、なかま/どうぐ/はいごう/ぼくじょう/
+//   ぼうけん(ステージ)へ行くほか、ガチャ/なかま/どうぐ/ぼくじょう/
 //   ショップ/かいふく/ずかん/セーブ をすべてここから開く。
 // ============================================================
 import { requireState, type App } from '../core/app';
@@ -16,14 +16,14 @@ import { drawText, drawWindow, FONT_SMALL, isPortrait, Menu, MessageBox, view } 
 import { getSpecies } from '../data/monsters';
 import { DexScene } from './dex';
 import { FarmScene } from './farm';
+import { GachaScene } from './gacha';
 import { ShopScene } from './shop';
 import { StageSelectScene } from './stageSelect';
 import { StatusScene } from './status';
-import { SynthesisScene } from './synthesis';
 
 type Phase = 'main' | 'party' | 'itemPick' | 'itemTarget' | 'message';
 
-const MENU = ['ぼうけんへ', 'つよさ', 'どうぐ', 'はいごう', 'ぼくじょう', 'ショップ', 'かいふく', 'ずかん', 'セーブ'] as const;
+const MENU = ['ぼうけんへ', 'ガチャ', 'つよさ', 'どうぐ', 'ぼくじょう', 'ショップ', 'かいふく', 'ずかん', 'セーブ'] as const;
 
 export class HomeScene implements Scene {
   private phase: Phase = 'main';
@@ -57,16 +57,16 @@ export class HomeScene implements Scene {
           case 0: // ぼうけんへ
             this.app.scenes.push(new StageSelectScene(this.app));
             break;
-          case 1: // つよさ
+          case 1: // ガチャ
+            this.app.scenes.push(new GachaScene(this.app));
+            break;
+          case 2: // つよさ
             this.buildPartyMenu();
             this.phase = 'party';
             break;
-          case 2: // どうぐ
+          case 3: // どうぐ
             this.buildItemMenu();
             this.phase = 'itemPick';
-            break;
-          case 3: // はいごう
-            this.app.scenes.push(new SynthesisScene(this.app));
             break;
           case 4: // ぼくじょう
             this.app.scenes.push(new FarmScene(this.app));
@@ -113,11 +113,6 @@ export class HomeScene implements Scene {
         const itemId = ids[this.itemMenu.cursor];
         if (!itemId) return;
         const item = getItem(itemId);
-        if (item.effect.kind === 'scoutBoost') {
-          this.messages.setPages(['それは たたかいの さいちゅうにしか つかえない!']);
-          this.phase = 'message';
-          return;
-        }
         this.selectedItemId = itemId;
         this.buildTargetMenu(item.effect.kind === 'revive');
         this.phase = 'itemTarget';
@@ -210,8 +205,6 @@ export class HomeScene implements Scene {
         }
         break;
       }
-      case 'scoutBoost':
-        break;
     }
     this.messages.setPages([text]);
     this.phase = 'message';
@@ -228,9 +221,14 @@ export class HomeScene implements Scene {
     const state = requireState(this.app);
     const p = isPortrait();
 
-    // タイトル + 所持金
+    // タイトル + 所持金 + オーブ
     drawWindow(ctx, 12, 12, view.w - 24, 52);
-    drawText(ctx, 'モンスターマスターの きょてん', p ? 28 : 40, 26, { color: '#ffd94a', font: FONT_SMALL });
+    drawText(ctx, p ? 'きょてん' : 'モンスターマスターの きょてん', p ? 28 : 40, 26, { color: '#ffd94a', font: FONT_SMALL });
+    drawText(ctx, `オーブ ${state.orbs}`, view.w - (p ? 28 : 40) - (p ? 110 : 130), 26, {
+      align: 'right',
+      color: '#8fd4ff',
+      font: FONT_SMALL,
+    });
     drawText(ctx, `${state.gold} G`, view.w - (p ? 28 : 40), 26, { align: 'right', color: '#ffd94a', font: FONT_SMALL });
 
     // マスコット(先頭のなかま)

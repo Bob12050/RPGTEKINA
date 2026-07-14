@@ -95,13 +95,35 @@ describe('セーブ / ロード', () => {
     const loaded = loadGame();
     expect(loaded).not.toBeNull();
     expect(loaded!.version).toBe(SAVE_VERSION);
-    // 位置情報は破棄される
+    // 位置情報・配合カウントは破棄される
     expect((loaded as unknown as Record<string, unknown>).mapId).toBeUndefined();
+    expect((loaded as unknown as Record<string, unknown>).synthesisCount).toBeUndefined();
     // ボス撃破済み → メインエリアの全クエストがクリア扱いになる
     expect(loaded!.clearedStages).toContain('plains-1');
     expect(loaded!.clearedStages).toContain('lair-2');
     // それ以外のデータは保たれる
     expect(loaded!.gold).toBe(500);
+    // おわびオーブが付与される
+    expect(loaded!.orbs).toBeGreaterThan(0);
+  });
+
+  it('v3セーブ(ソシャゲ化まえ)にオーブを付与し、廃止アイテムを取り除く', () => {
+    const v3 = {
+      ...newGame(),
+      version: 3,
+      items: { herb: 4, meatchunk: 2, royalmeat: 1 },
+      clearedStages: ['plains-1'],
+    } as Record<string, unknown>;
+    delete v3.orbs;
+    (v3 as { synthesisCount?: number }).synthesisCount = 5;
+    storage.setItem('rpgtekina_save_1', JSON.stringify(v3));
+    const loaded = loadGame();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(SAVE_VERSION);
+    expect(loaded!.orbs).toBeGreaterThan(0);
+    expect(loaded!.items).toEqual({ herb: 4 }); // ごちそう系は消える
+    expect((loaded as unknown as Record<string, unknown>).synthesisCount).toBeUndefined();
+    expect(loaded!.clearedStages).toEqual(['plains-1']);
   });
 
   it('v2セーブ(フラットなステージID)をクエストIDへ展開して移行する', () => {

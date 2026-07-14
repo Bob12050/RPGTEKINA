@@ -135,10 +135,19 @@ export class StageSelectScene implements Scene {
         color: '#ccccee',
       });
       // ドロップ情報(モンスタードロップがあれば見せてあげる)
-      if (quest.monsterDrop) {
-        const known = state.seenSpecies.includes(quest.monsterDrop.speciesId);
-        const name = known ? getSpecies(quest.monsterDrop.speciesId).name : '？？？';
-        drawText(ctx, `ドロップ: ${name}`, 32, dy + 44, { font: FONT_SMALL, color: '#8fd4ff' });
+      if (quest.monsterDrops && quest.monsterDrops.length > 0) {
+        const names = quest.monsterDrops
+          .map((md) => (state.seenSpecies.includes(md.speciesId) ? getSpecies(md.speciesId).name : '？？？'))
+          .join(' / ');
+        drawText(ctx, `ドロップ: ${names}`, 32, dy + 44, { font: FONT_SMALL, color: '#8fd4ff' });
+      }
+      // 初回クリアのオーブ報酬(未クリアのときだけ)
+      if (!state.clearedStages.includes(quest.id) && quest.rewardOrbs > 0) {
+        drawText(ctx, `しょかい: オーブ×${quest.rewardOrbs}`, view.w - 32, dy + 16, {
+          align: 'right',
+          font: FONT_SMALL,
+          color: '#ffd94a',
+        });
       }
       drawText(ctx, 'Z/A: いどむ   X/B: マップへもどる', view.w - 32, dy + (p ? 84 : 78), {
         align: 'right',

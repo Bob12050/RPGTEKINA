@@ -53,56 +53,16 @@ describe('Battle', () => {
     expect(unit.mp).toBe(before - 2);
   });
 
-  it('スカウト成功で敵が離脱し、最後の敵なら勝利になる(報酬なし)', () => {
-    setRandomSource(() => 0); // 必ず成功
-    const ally = createMonster('tekina', 50);
-    const battle = singleWave([ally], [{ speciesId: 'puni', level: 2 }]);
-    const events = battle.executeTurn({ kind: 'scout', targetId: battle.enemies[0]!.id });
-    // スカウトした敵しかいない → 全滅扱いで勝利、ただし経験値は入らない
-    expect(battle.result).toBe('win');
-    expect(battle.scoutedEnemies).toHaveLength(1);
-    expect(battle.scoutedEnemies[0]!.speciesId).toBe('puni');
-    expect(battle.rewards.exp).toBe(0);
-    expect(events.some((e) => e.type === 'scoutAttempt')).toBe(true);
-  });
-
-  it('敵が複数ならスカウト成功後もバトルは続く', () => {
-    setRandomSource(() => 0);
-    const ally = createMonster('tekina', 50);
-    const battle = singleWave(
-      [ally],
-      [
-        { speciesId: 'puni', level: 2 },
-        { speciesId: 'wolf', level: 3 },
-      ],
-    );
-    battle.executeTurn({ kind: 'scout', targetId: battle.enemies[0]!.id });
-    expect(battle.result).toBeNull(); // まだ wolf が残っている
-    expect(battle.scoutedEnemies).toHaveLength(1);
-    expect(battle.aliveEnemies()).toHaveLength(1);
-  });
-
-  it('スカウト失敗ではターンが続き敵が行動する', () => {
-    let calls = 0;
-    setRandomSource(() => {
-      calls++;
-      return 0.9999;
-    });
-    const ally = createMonster('puni', 5);
-    const battle = singleWave([ally], [{ speciesId: 'golem', level: 15 }]);
-    battle.executeTurn({ kind: 'scout', targetId: battle.enemies[0]!.id });
-    expect(battle.result === null || battle.result === 'lose').toBe(true);
-    expect(battle.scoutedEnemies).toHaveLength(0);
-    expect(calls).toBeGreaterThan(0);
-  });
-
-  it('ボスWAVEはスカウトできない(スカウト不可種)', () => {
-    setRandomSource(() => 0);
-    const ally = createMonster('grandragon', 50);
-    const battle = singleWave([ally], [{ speciesId: 'tekina', level: 32 }], true);
-    const events = battle.executeTurn({ kind: 'scout', targetId: battle.enemies[0]!.id });
-    expect(battle.scoutedEnemies).toHaveLength(0);
-    expect(events.some((e) => e.type === 'scoutAttempt')).toBe(false);
+  it('どうぐ(やくそう)で味方のHPが回復し、そのあと敵が行動する', () => {
+    setRandomSource(() => 0.5);
+    const ally = createMonster('golem', 20);
+    const battle = singleWave([ally], [{ speciesId: 'puni', level: 1 }]);
+    const unit = battle.allies[0]!;
+    unit.hp = 10;
+    const events = battle.executeTurn({ kind: 'item', itemId: 'herb', targetAllyId: unit.id });
+    const healEvent = events.find((e) => e.type === 'hpChange' && e.delta > 0 && e.unitId === unit.id);
+    expect(healEvent).toBeDefined();
+    expect(unit.hp).toBeGreaterThan(10);
   });
 
   it('ボスWAVEからは逃げられない', () => {
@@ -252,24 +212,4 @@ describe('連戦WAVE(シームレス増援)', () => {
     expect(battle.isBossWave()).toBe(true); // 最終WAVEはボス
   });
 
-  it('WAVE中にスカウトした仲間は accumulate される', () => {
-    setRandomSource(() => 0);
-    const ally = createMonster('tekina', 50);
-    const battle = new Battle(
-      [ally],
-      [
-        [{ speciesId: 'puni', level: 2 }],
-        [{ speciesId: 'wolf', level: 3 }],
-      ],
-    );
-    // WAVE1のぷにをスカウト → 敵ゼロ → WAVE2が流れ込む
-    battle.executeTurn({ kind: 'scout', targetId: battle.enemies[0]!.id });
-    expect(battle.result).toBeNull();
-    expect(battle.waveIndex).toBe(1);
-    // WAVE2のウルフもスカウト → 全WAVE終了 → 勝利
-    battle.executeTurn({ kind: 'scout', targetId: battle.enemies[0]!.id });
-    expect(battle.result).toBe('win');
-    expect(battle.scoutedEnemies.map((s) => s.speciesId)).toEqual(['puni', 'wolf']);
-    expect(battle.rewards.exp).toBe(0); // 1体も倒していない
-  });
 });

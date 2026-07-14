@@ -1,6 +1,6 @@
 // エリア/クエスト(ノマダン式2階層)の整合性 + 解放ロジックの検証
 import { describe, expect, it } from 'vitest';
-import { getSpecies, hasSpecies } from '../src/data/monsters';
+import { hasSpecies } from '../src/data/monsters';
 import { getItem } from '../src/data/items';
 import {
   AREAS,
@@ -42,9 +42,10 @@ describe('エリア/クエストデータ', () => {
     }
   });
 
-  it('報酬アイテムが存在し、金額が正', () => {
+  it('報酬アイテムが存在し、金額・オーブが正', () => {
     for (const s of STAGES) {
       expect(s.rewardGold).toBeGreaterThan(0);
+      expect(s.rewardOrbs, `${s.id} のオーブ報酬`).toBeGreaterThan(0);
       for (const r of s.rewardItems) {
         expect(() => getItem(r.itemId), `${s.id} の ${r.itemId}`).not.toThrow();
         expect(r.count).toBeGreaterThan(0);
@@ -124,16 +125,15 @@ describe('エリア/クエストデータ', () => {
     }
   });
 
-  it('モンスタードロップは実在し、配合限定種(scout:0)を配らない', () => {
+  it('モンスタードロップは実在し、確率・レベルが正しい', () => {
     for (const s of STAGES) {
-      const md = s.monsterDrop;
-      if (!md) continue;
-      expect(hasSpecies(md.speciesId), `${s.id} の ${md.speciesId}`).toBe(true);
-      expect(getSpecies(md.speciesId).scoutDifficulty, `${s.id} の ${md.speciesId} は配合限定`).toBeGreaterThan(0);
-      expect(md.chance).toBeGreaterThan(0);
-      expect(md.chance).toBeLessThanOrEqual(1);
-      expect(md.level).toBeGreaterThanOrEqual(1);
-      expect(md.level).toBeLessThanOrEqual(50);
+      for (const md of s.monsterDrops ?? []) {
+        expect(hasSpecies(md.speciesId), `${s.id} の ${md.speciesId}`).toBe(true);
+        expect(md.chance).toBeGreaterThan(0);
+        expect(md.chance).toBeLessThanOrEqual(1);
+        expect(md.level).toBeGreaterThanOrEqual(1);
+        expect(md.level).toBeLessThanOrEqual(50);
+      }
     }
   });
 

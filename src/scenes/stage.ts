@@ -69,6 +69,10 @@ export class StageScene implements Scene {
     if (firstClear) {
       state.gold += stage.rewardGold;
       pages.push(`ほうしゅう ${stage.rewardGold}ゴールドを てにいれた!`);
+      if (stage.rewardOrbs > 0) {
+        state.orbs += stage.rewardOrbs;
+        pages.push(`オーブを ${stage.rewardOrbs}こ てにいれた! (ガチャで つかえる)`);
+      }
       for (const r of stage.rewardItems) {
         addItem(state, r.itemId, r.count);
         pages.push(`${getItem(r.itemId).name}を ${r.count}こ てにいれた!`);
@@ -88,9 +92,9 @@ export class StageScene implements Scene {
       }
     }
 
-    // モンスタードロップ(毎回抽選・モンスト式)
-    const md = stage.monsterDrop;
-    if (md && chance(md.chance)) {
+    // モンスタードロップ(毎回それぞれ抽選・モンスト式)
+    for (const md of stage.monsterDrops ?? []) {
+      if (!chance(md.chance)) continue;
       const sp = getSpecies(md.speciesId);
       const joined = createMonster(md.speciesId, md.level);
       markScouted(state, md.speciesId);

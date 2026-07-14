@@ -9,7 +9,6 @@ import { getItem } from '../data/items';
 import { getSpecies } from '../data/monsters';
 import { getSkill } from '../data/skills';
 import { expFromEnemy, goldFromEnemy, maxStats, naturalSkillsAt } from './monster';
-import { rollScout, scoutRate } from './scout';
 
 // ---- バトル内ユニット ----
 export interface BattleUnit {
@@ -35,7 +34,6 @@ export type AllyAction =
 
 export type PartyCommand =
   | { kind: 'fight'; actions: Map<string, AllyAction> }
-  | { kind: 'scout'; targetId: string }
   | { kind: 'item'; itemId: string; targetAllyId?: string }
   | { kind: 'flee' };
 
@@ -45,7 +43,6 @@ export type BattleEvent =
   | { type: 'hpChange'; unitId: string; delta: number; hpAfter: number }
   | { type: 'mpChange'; unitId: string; delta: number; mpAfter: number }
   | { type: 'ko'; unitId: string }
-  | { type: 'scoutAttempt'; rate: number }
   | { type: 'newWave'; waveIndex: number }
   | { type: 'end'; result: BattleResult };
 
@@ -140,10 +137,6 @@ export class Battle {
   bossFinalWave: boolean;
   result: BattleResult | null = null;
   rewards: BattleRewards = { exp: 0, gold: 0 };
-  /** ごちそうアイテムによるスカウト倍率(戦闘終了まで持続) */
-  scoutBoost = 1;
-  /** スカウト成功した敵(戦闘終了後にUI側が加入処理する) */
-  scoutedEnemies: EnemySpec[] = [];
   /** 倒した種族(最終ボス撃破判定などに使う) */
   defeatedSpecies = new Set<string>();
   private fleeAttempts = 0;
@@ -207,10 +200,6 @@ export class Battle {
     if (this.result) return ev;
 
     switch (command.kind) {
-      case 'scout':
-        this.doScout(ev, command.targetId);
-        if (!this.result) this.enemiesAct(ev);
-        break;
       case 'item':
         this.doItem(ev, command.itemId, command.targetAllyId);
         if (!this.result) this.enemiesAct(ev);
@@ -228,37 +217,6 @@ export class Battle {
     // ターン終了時: ぼうぎょ解除
     for (const u of [...this.allies, ...this.enemies]) u.guarding = false;
     return ev;
-  }
-
-  // ---- スカウト ----
-  private doScout(ev: BattleEvent[], targetId: string): void {
-    const target = this.findUnit(targetId);
-    if (!target || target.hp <= 0) {
-      ev.push({ type: 'message', text: 'しかし あいては いなかった!' });
-      return;
-    }
-    const atkSum = this.aliveAllies().reduce((s, u) => s + effAtk(u), 0);
-    const rate = scoutRate(
-      atkSum,
-      { speciesId: target.speciesId, maxHp: target.stats.hp, currentHp: target.hp, def: target.stats.def },
-      this.scoutBoost,
-    );
-    ev.push({ type: 'message', text: `みんなは ${target.name}に なかまに なるよう よびかけた!` });
-    if (rate === null) {
-      ev.push({ type: 'message', text: `${target.name}は まったく こちらを みていない! なかまに できそうにない!` });
-      return;
-    }
-    ev.push({ type: 'scoutAttempt', rate });
-    if (rollScout(rate)) {
-      ev.push({ type: 'message', text: `${target.name}は なかまに なりたそうに こちらを みている!` });
-      ev.push({ type: 'message', text: `${target.name}が なかまに なった! (たたかいのあと ごうりゅうする)` });
-      // 仲間はいったん戦線を離脱し、戦闘終了後に加入する。バトルは続行!
-      this.scoutedEnemies.push({ speciesId: target.speciesId, level: target.level });
-      target.hp = 0; // 戦闘から離脱(KOイベント・経験値なし)
-    } else {
-      ev.push({ type: 'message', text: `${target.name}は そっぽを むいてしまった…。` });
-      this.scoutBoost = 1; // ごちそう効果はスカウト1回で消費
-    }
   }
 
   // ---- どうぐ ----
@@ -295,12 +253,6 @@ export class Battle {
         ev.push({ type: 'message', text: `${item.name}を つかった!` });
         ev.push({ type: 'hpChange', unitId: target.id, delta: target.hp, hpAfter: target.hp });
         ev.push({ type: 'message', text: `${target.name}が いきかえった!` });
-        break;
-      }
-      case 'scoutBoost': {
-        this.scoutBoost = Math.max(this.scoutBoost, item.effect.multiplier);
-        ev.push({ type: 'message', text: `${item.name}を なげあたえた!` });
-        ev.push({ type: 'message', text: 'モンスターたちの めが かがやいている! (スカウトりつ アップ)' });
         break;
       }
     }
@@ -568,7 +520,7 @@ export class Battle {
         type: 'message',
         text: target.side === 'enemy' ? `${target.name}を たおした!` : `${target.name}は ちからつきた…。`,
       });
-      // 倒した敵の報酬はその場で加算(スカウトで離脱した敵はここを通らない)
+      // 倒した敵の報酬はその場で加算する
       if (target.side === 'enemy') {
         this.rewards.exp += expFromEnemy(target.speciesId, target.level);
         this.rewards.gold += goldFromEnemy(target.speciesId, target.level);

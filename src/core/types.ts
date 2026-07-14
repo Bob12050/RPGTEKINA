@@ -25,7 +25,7 @@ export type Family =
   | 'demon' // あくま系
   | 'zombie' // ゾンビ系
   | 'material' // ぶっしつ系
-  | 'mystic'; // ？？？系(配合限定)
+  | 'mystic'; // ？？？系(超レア)
 
 export const FAMILY_NAMES: Record<Family, string> = {
   slime: 'スライムけい',
@@ -38,13 +38,18 @@ export const FAMILY_NAMES: Record<Family, string> = {
   mystic: '？？？けい',
 };
 
-/** モンスターのランク(F が最弱、S が最強) */
+/** モンスターのランク(F が最弱、S が最強)。ガチャのレア度 ★1〜★7 に対応する */
 export type Rank = 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S';
 
 export const RANK_ORDER: Rank[] = ['F', 'E', 'D', 'C', 'B', 'A', 'S'];
 
 export function rankScore(rank: Rank): number {
   return RANK_ORDER.indexOf(rank);
+}
+
+/** レア度(★の数)。F=★1 〜 S=★7 */
+export function rankStars(rank: Rank): number {
+  return rankScore(rank) + 1;
 }
 
 /** 基本ステータス */
@@ -105,8 +110,6 @@ export interface SpeciesDef {
   learnset: { level: number; skillId: string }[];
   /** 属性耐性: ダメージ倍率(未指定は 1.0)。0.5=半減 / 0=無効 / 1.5=弱点 */
   resist: Partial<Record<Element, number>>;
-  /** スカウトしにくさ(1.0 が標準。大きいほど難しい。0 はスカウト不可) */
-  scoutDifficulty: number;
   /** 倒したときの獲得経験値・ゴールドの基準値 */
   expYield: number;
   goldYield: number;
@@ -122,9 +125,9 @@ export interface MonsterInstance {
   nickname: string;
   level: number;
   exp: number;
-  /** 配合を重ねると増えるプラス値(ステータス補正) */
+  /** プラス値(ステータス補正。将来の強化システム用) */
   plus: number;
-  /** 配合で引き継いだ永続ボーナス */
+  /** 永続ステータスボーナス(将来の強化システム用) */
   bonus: Stats;
   /** 覚えているとくぎ(最大 MAX_SKILLS 個) */
   skillIds: string[];
@@ -142,72 +145,16 @@ export interface ItemDef {
   effect:
     | { kind: 'heal'; power: number }
     | { kind: 'mp'; power: number }
-    | { kind: 'revive'; ratio: number }
-    | { kind: 'scoutBoost'; multiplier: number };
+    | { kind: 'revive'; ratio: number };
 }
-
-/** マップのタイル種別 */
-export type TileKind =
-  | 'grass'
-  | 'path'
-  | 'tree'
-  | 'water'
-  | 'mountain'
-  | 'wall'
-  | 'bridge'
-  | 'cave'
-  | 'lava'
-  | 'sand'
-  | 'flower'
-  | 'building'
-  | 'stairs';
-
-export interface Portal {
-  x: number;
-  y: number;
-  toMap: string;
-  toX: number;
-  toY: number;
-}
-
-export interface Npc {
-  x: number;
-  y: number;
-  name: string;
-  lines: string[];
-  /** 特殊NPC: 話しかけると機能が起動する */
-  action?: 'heal' | 'shop' | 'synthesis' | 'farm' | 'boss' | 'save';
-  color?: string;
-}
-
-export interface EncounterEntry {
-  speciesId: string;
-  minLevel: number;
-  maxLevel: number;
-  weight: number;
-}
-
-export interface MapDef {
-  id: string;
-  name: string;
-  /** 1文字=1タイルの文字列配列(全行同じ長さ) */
-  tiles: string[];
-  /** 1歩ごとのエンカウント率(0 なら安全地帯) */
-  encounterRate: number;
-  encounters: EncounterEntry[];
-  portals: Portal[];
-  npcs: Npc[];
-  /** 出現数の最大(1〜3) */
-  maxGroupSize: number;
-}
-
-export type Dir = 'up' | 'down' | 'left' | 'right';
 
 /** セーブされるゲーム全体の状態 */
 export interface GameState {
   version: number;
   playerName: string;
   gold: number;
+  /** ガチャ用の通貨(クエスト初回クリアなどで獲得) */
+  orbs: number;
   party: MonsterInstance[];
   farm: MonsterInstance[];
   items: Record<string, number>;
@@ -218,13 +165,11 @@ export interface GameState {
   seenSpecies: string[];
   scoutedSpecies: string[];
   battleCount: number;
-  synthesisCount: number;
 }
 
 // ---- ゲームルール定数 ----
 export const PARTY_MAX = 4;
 export const FARM_MAX = 50;
 export const MAX_SKILLS = 6;
-export const SYNTHESIS_MIN_LEVEL = 10;
 export const MAX_LEVEL = 50;
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;

@@ -69,12 +69,13 @@ export function deleteSave(slot = 1): void {
   storage.removeItem(key(slot));
 }
 
-/** 旧セーブに含まれた不要フィールド(フィールド探索時代の位置情報) */
+/** 旧セーブに含まれた不要フィールド(フィールド探索時代・配合時代の名残) */
 interface LegacyFields {
   mapId?: string;
   x?: number;
   y?: number;
   dir?: string;
+  synthesisCount?: number;
 }
 
 /** v2(フラットなステージID) → v3(エリア内クエストID)の対応表 */
@@ -88,6 +89,12 @@ const V2_STAGE_TO_QUESTS: Record<string, string[]> = {
   'trial-light': ['trial-2'],
   'trial-god': ['trial-3'],
 };
+
+/** v4(ソシャゲ化)で廃止されたアイテム(スカウト用ごちそう) */
+const REMOVED_ITEMS = ['meatchunk', 'royalmeat'];
+
+/** v4移行時に旧セーブへ配るおわびオーブ(ガチャをすぐ試せる量) */
+const MIGRATION_ORBS = 60;
 
 function migrate(state: GameState): GameState | null {
   if (typeof state.version !== 'number') return null;
@@ -104,11 +111,17 @@ function migrate(state: GameState): GameState | null {
   // v2 → v3: 旧ステージIDを新クエストID群に展開(クリア済みエリアは全クエストクリア扱い)
   cleared = [...new Set(cleared.flatMap((id) => V2_STAGE_TO_QUESTS[id] ?? [id]))];
 
-  const migrated: GameState = { ...state, version: SAVE_VERSION, clearedStages: cleared };
-  // フィールド探索時代の位置情報は破棄
+  // v3 → v4(ソシャゲ化): オーブを付与し、廃止アイテムを取り除く
+  const items = { ...(state.items ?? {}) };
+  for (const id of REMOVED_ITEMS) delete items[id];
+  const orbs = typeof state.orbs === 'number' ? state.orbs : MIGRATION_ORBS;
+
+  const migrated: GameState = { ...state, version: SAVE_VERSION, clearedStages: cleared, items, orbs };
+  // 旧時代のフィールドは破棄
   delete (migrated as GameState & LegacyFields).mapId;
   delete (migrated as GameState & LegacyFields).x;
   delete (migrated as GameState & LegacyFields).y;
   delete (migrated as GameState & LegacyFields).dir;
+  delete (migrated as GameState & LegacyFields).synthesisCount;
   return migrated;
 }

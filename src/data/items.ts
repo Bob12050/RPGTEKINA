@@ -32,20 +32,6 @@ export const ITEMS: ItemDef[] = [
     price: 150,
     effect: { kind: 'revive', ratio: 0.5 },
   },
-  {
-    id: 'meatchunk',
-    name: 'モンスターのごちそう',
-    desc: 'スカウトの成功率が1.5倍になる(戦闘中に使用)',
-    price: 80,
-    effect: { kind: 'scoutBoost', multiplier: 1.5 },
-  },
-  {
-    id: 'royalmeat',
-    name: 'ごうかなごちそう',
-    desc: 'スカウトの成功率が2倍になる(戦闘中に使用)',
-    price: 300,
-    effect: { kind: 'scoutBoost', multiplier: 2.0 },
-  },
 ];
 
 const itemMap = new Map(ITEMS.map((i) => [i.id, i]));
@@ -57,11 +43,4 @@ export function getItem(id: string): ItemDef {
 }
 
 /** ショップに並ぶ商品 */
-export const SHOP_ITEMS: string[] = [
-  'herb',
-  'goodherb',
-  'magicwater',
-  'lifeleaf',
-  'meatchunk',
-  'royalmeat',
-];
+export const SHOP_ITEMS: string[] = ['herb', 'goodherb', 'magicwater', 'lifeleaf'];
