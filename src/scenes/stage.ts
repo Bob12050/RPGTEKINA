@@ -100,10 +100,10 @@ export class StageScene implements Scene {
       markScouted(state, md.speciesId);
       const where = addMonster(state, joined);
       if (where === 'full') {
-        pages.push(`おや?! ${sp.name}が ついてきたが ぼくじょうが いっぱいだった…。`);
+        pages.push(`おや?! ${sp.name}が ついてきたが ボックスが いっぱいだった…。`);
       } else {
         pages.push(`おや?! ${sp.name}が なかまに なりたそうに ついてきた!`);
-        pages.push(where === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ぼくじょうへ!`);
+        pages.push(where === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ボックスへ!`);
       }
     }
 

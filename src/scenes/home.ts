@@ -31,21 +31,20 @@ import {
   type Rect,
 } from '../ui/window';
 import { getSpecies } from '../data/monsters';
+import { MonsterBoxScene } from './box';
 import { DexScene } from './dex';
-import { FarmScene } from './farm';
 import { GachaScene } from './gacha';
 import { ShopScene } from './shop';
 import { StageSelectScene } from './stageSelect';
 import { StatusScene } from './status';
 
-type Phase = 'main' | 'party' | 'itemPick' | 'itemTarget' | 'message';
+type Phase = 'main' | 'itemPick' | 'itemTarget' | 'message';
 
-/** ヒーローボタン(クエスト)以外の 8 機能タイル */
+/** ヒーローボタン(クエスト)以外の 7 機能タイル */
 const TILES = [
   { icon: '🎰', label: 'ガチャ', color: '#7a3ad6' },
-  { icon: '💪', label: 'つよさ', color: '#2c6a4f' },
+  { icon: '📦', label: 'モンスター', color: '#2c6a4f' },
   { icon: '🎒', label: 'どうぐ', color: '#7a5a26' },
-  { icon: '🐾', label: 'ぼくじょう', color: '#3f6a2c' },
   { icon: '🛒', label: 'ショップ', color: '#2c4a80' },
   { icon: '💖', label: 'かいふく', color: '#a83a6a' },
   { icon: '📖', label: 'ずかん', color: '#44506a' },
@@ -62,7 +61,6 @@ export class HomeScene implements Scene {
   private heroButton = new Button();
   private tiles = TILES.map(() => new Button());
   private partySlots: Rect[] = [];
-  private partyMenu = new Menu([]);
   private itemMenu = new Menu([]);
   private targetMenu = new Menu([]);
   private messages = new MessageBox();
@@ -122,22 +120,6 @@ export class HomeScene implements Scene {
         } else if (key === 'confirm') this.activateTile(this.cursor);
         break;
       }
-      case 'party': {
-        if (tap) {
-          const idx = this.partyMenu.itemAt(tap.x, tap.y);
-          if (idx !== null) {
-            this.partyMenu.setCursor(idx);
-            this.openStatus(idx);
-          } else if (this.tapOutsideOverlay(tap.x, tap.y)) {
-            this.phase = 'main';
-          }
-          return;
-        }
-        const r = this.partyMenu.handleKey(key!);
-        if (r === 'cancel') this.phase = 'main';
-        else if (r === 'select') this.openStatus(this.partyMenu.cursor);
-        break;
-      }
       case 'itemPick': {
         if (tap) {
           const idx = this.itemMenu.itemAt(tap.x, tap.y);
@@ -183,7 +165,7 @@ export class HomeScene implements Scene {
     return this.overlayRect !== null && !inRect(px, py, this.overlayRect);
   }
 
-  /** i: 0=クエスト(ヒーロー) / 1〜8=TILES順 */
+  /** i: 0=クエスト(ヒーロー) / 1〜7=TILES順 */
   private activateTile(i: number): void {
     const state = requireState(this.app);
     switch (i) {
@@ -194,40 +176,30 @@ export class HomeScene implements Scene {
         this.app.scenes.push(new GachaScene(this.app));
         break;
       case 2:
-        this.buildPartyMenu();
-        this.phase = 'party';
+        this.app.scenes.push(new MonsterBoxScene(this.app));
         break;
       case 3:
         this.buildItemMenu();
         this.phase = 'itemPick';
         break;
       case 4:
-        this.app.scenes.push(new FarmScene(this.app));
-        break;
-      case 5:
         this.app.scenes.push(new ShopScene(this.app));
         break;
-      case 6:
+      case 5:
         healParty(state);
         this.messages.setPages(['モンスターたちは すっかり げんきに なった!']);
         this.phase = 'message';
         break;
-      case 7:
+      case 6:
         this.app.scenes.push(new DexScene(this.app));
         break;
-      case 8: {
+      case 7: {
         const ok = saveGame(state);
         this.messages.setPages([ok ? 'ぼうけんの きろくを のこした!' : 'セーブに しっぱいした…。']);
         this.phase = 'message';
         break;
       }
     }
-  }
-
-  private openStatus(index: number): void {
-    const state = requireState(this.app);
-    const m = state.party[index];
-    if (m) this.app.scenes.push(new StatusScene(this.app, m));
   }
 
   private pickItem(index: number): void {
@@ -251,12 +223,6 @@ export class HomeScene implements Scene {
   private itemIds(): string[] {
     const state = requireState(this.app);
     return Object.keys(state.items).filter((id) => (state.items[id] ?? 0) > 0);
-  }
-
-  private buildPartyMenu(): void {
-    const state = requireState(this.app);
-    this.partyMenu.setItems(state.party.map((m) => ({ label: monsterLabel(m), note: monsterNote(m) })));
-    this.partyMenu.reset();
   }
 
   private buildItemMenu(): void {
@@ -349,11 +315,6 @@ export class HomeScene implements Scene {
     const mw = Math.min(440, view.w - 24);
     const mx = (view.w - mw) / 2;
     const my = p ? 150 : 100;
-    if (this.phase === 'party') {
-      this.dimBackground(ctx);
-      const h = this.partyMenu.draw(ctx, mx, my, mw, 'なかま (タップで つよさ)');
-      this.overlayRect = { x: mx, y: my, w: mw, h };
-    }
     if (this.phase === 'itemPick' || this.phase === 'itemTarget') {
       this.dimBackground(ctx);
       const h = this.itemMenu.draw(ctx, mx, my, mw, 'どうぐ');

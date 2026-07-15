@@ -4,10 +4,11 @@
 // ============================================================
 import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
-import { FARM_MAX, PARTY_MAX, rankStars, type Rank, type SpeciesDef } from '../core/types';
+import { FARM_MAX, PARTY_MAX, rankStars, type SpeciesDef } from '../core/types';
 import { gachaLevel, MULTI_COST, MULTI_COUNT, pullOne, pullTen, RANK_RATES, SINGLE_COST } from '../data/gacha';
 import { createMonster } from '../game/monster';
 import { addMonster, markScouted } from '../game/state';
+import { RANK_COLORS } from '../ui/format';
 import { drawFancyBg } from '../ui/bg';
 import { drawMonster } from '../ui/sprites';
 import { BackButton, Button, drawText, drawWindow, FONT_BIG, FONT_SMALL, isPortrait, view } from '../ui/window';
@@ -19,17 +20,6 @@ interface PullResult {
   level: number;
   where: 'party' | 'farm';
 }
-
-/** レア度ごとの表示色(★4=青 / ★5=紫 / ★6=金 / ★7=虹っぽく) */
-const RANK_COLORS: Record<Rank, string> = {
-  F: '#ffffff',
-  E: '#ffffff',
-  D: '#b5e8a0',
-  C: '#8fd4ff',
-  B: '#c98af5',
-  A: '#ffd94a',
-  S: '#ff8ad8',
-};
 
 /** 単発演出: この秒数だけタメてから公開 */
 const SINGLE_DELAY = 0.9;
@@ -53,7 +43,7 @@ export class GachaScene implements Scene {
     this.app.input.flush();
   }
 
-  /** 空きスロット(パーティ+ぼくじょう)の数 */
+  /** 空きスロット(パーティ+ボックス)の数 */
   private freeSlots(): number {
     const state = requireState(this.app);
     return PARTY_MAX - state.party.length + (FARM_MAX - state.farm.length);
@@ -68,7 +58,7 @@ export class GachaScene implements Scene {
       return;
     }
     if (this.freeSlots() < count) {
-      this.message = 'ぼくじょうが いっぱいだ! ぼくじょうで わかれを つげてから こよう。';
+      this.message = 'ボックスが いっぱいだ! モンスターボックスを せいりしよう。';
       this.phase = 'message';
       return;
     }
@@ -253,7 +243,7 @@ export class GachaScene implements Scene {
     const stars = '★'.repeat(rankStars(sp.rank));
     drawText(ctx, stars, cx, cy + size / 2 + 30, { align: 'center', color: RANK_COLORS[sp.rank] });
     drawText(ctx, sp.name, cx, cy + size / 2 + 62, { align: 'center', color: RANK_COLORS[sp.rank] });
-    drawText(ctx, `Lv${r.level} で ${r.where === 'party' ? 'パーティに くわわった!' : 'ぼくじょうへ!'}`, cx, cy + size / 2 + 96, {
+    drawText(ctx, `Lv${r.level} で ${r.where === 'party' ? 'パーティに くわわった!' : 'ボックスへ!'}`, cx, cy + size / 2 + 96, {
       align: 'center',
       font: FONT_SMALL,
       color: '#ccccee',
@@ -293,7 +283,7 @@ export class GachaScene implements Scene {
       drawMonster(ctx, sp.family, sp.palette, x + 18, y - 6, 2);
       drawText(ctx, '★'.repeat(stars), x + 60, y, { font: FONT_SMALL, color: RANK_COLORS[sp.rank] });
       drawText(ctx, sp.name, x + 60 + 130, y, { font: FONT_SMALL, color: RANK_COLORS[sp.rank] });
-      drawText(ctx, r.where === 'party' ? 'パーティ' : 'ぼくじょう', x + w - 20, y, {
+      drawText(ctx, r.where === 'party' ? 'パーティ' : 'ボックス', x + w - 20, y, {
         align: 'right',
         font: FONT_SMALL,
         color: '#aaaacc',
