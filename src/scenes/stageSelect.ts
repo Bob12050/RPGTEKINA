@@ -14,7 +14,7 @@ import {
 } from '../data/stages';
 import { getSpecies } from '../data/monsters';
 import { drawGridSprite, drawMonster, FAMILY_SPRITES } from '../ui/sprites';
-import { drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
+import { BackButton, drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
 import { StageScene } from './stage';
 
 type Phase = 'area' | 'quest';
@@ -29,12 +29,47 @@ export class StageSelectScene implements Scene {
   private areaCursor = 0;
   private questMenu = new Menu([], 8);
   private currentArea: AreaDef | null = null;
+  private backButton = new BackButton();
   private time = 0;
 
   constructor(private app: App) {}
 
   onEnter(): void {
     this.app.input.flush();
+  }
+
+  /** エリアノードの座標(縦持ち: 下から上へジグザグ / 横持ち: 左から右へジグザグ) */
+  private nodePositions(): { x: number; y: number }[] {
+    const p = isPortrait();
+    const n = AREAS.length;
+    return AREAS.map((_, i) => {
+      if (p) {
+        return { x: view.w / 2 + (i % 2 === 0 ? -85 : 85), y: view.h - 220 - i * 86 };
+      }
+      return { x: 110 + (i * (view.w - 220)) / (n - 1), y: 250 + (i % 2 === 0 ? 55 : -55) };
+    });
+  }
+
+  /** エリアを開いてクエスト一覧へ */
+  private enterArea(index: number): void {
+    const area = AREAS[index];
+    if (!area) return;
+    const state = requireState(this.app);
+    if (!isAreaUnlocked(area.id, state.clearedStages)) return;
+    this.currentArea = area;
+    this.questMenu.reset();
+    this.rebuildQuests();
+    this.phase = 'quest';
+  }
+
+  /** クエストに挑む */
+  private enterQuest(index: number): void {
+    if (!this.currentArea) return;
+    const quest = questsOf(this.currentArea.id)[index];
+    if (!quest) return;
+    const state = requireState(this.app);
+    if (!isStageUnlocked(quest, state.clearedStages)) return;
+    this.app.scenes.push(new StageScene(this.app, quest.id));
   }
 
   private rebuildQuests(): void {
@@ -59,11 +94,30 @@ export class StageSelectScene implements Scene {
   update(dt: number): void {
     this.time += dt;
     if (this.phase === 'quest') this.rebuildQuests();
+    const tap = this.app.input.takeTap();
     const key = this.app.input.poll();
-    if (!key) return;
+    if (!tap && !key) return;
 
     if (this.phase === 'area') {
-      // マップ上のノードを 前/次 で移動する
+      if (tap) {
+        if (this.backButton.contains(tap.x, tap.y)) {
+          this.app.scenes.pop();
+          return;
+        }
+        // エリアノードをタップ: 解放済みなら そのまま入る
+        const nodes = this.nodePositions();
+        for (let i = 0; i < nodes.length; i++) {
+          const dx = tap.x - nodes[i]!.x;
+          const dy = tap.y - nodes[i]!.y;
+          if (dx * dx + dy * dy <= 48 * 48) {
+            this.areaCursor = i;
+            this.enterArea(i);
+            return;
+          }
+        }
+        return;
+      }
+      // キーボード操作
       if (key === 'up' || key === 'left') {
         this.areaCursor = (this.areaCursor - 1 + AREAS.length) % AREAS.length;
         return;
@@ -76,32 +130,29 @@ export class StageSelectScene implements Scene {
         this.app.scenes.pop();
         return;
       }
-      if (key !== 'confirm') return;
-      const area = AREAS[this.areaCursor];
-      if (!area) return;
-      const state = requireState(this.app);
-      if (!isAreaUnlocked(area.id, state.clearedStages)) return;
-      this.currentArea = area;
-      this.questMenu.reset();
-      this.rebuildQuests();
-      this.phase = 'quest';
+      if (key === 'confirm') this.enterArea(this.areaCursor);
       return;
     }
 
     // quest phase
-    const r = this.questMenu.handleKey(key);
+    if (tap) {
+      if (this.backButton.contains(tap.x, tap.y)) {
+        this.phase = 'area';
+        return;
+      }
+      const idx = this.questMenu.itemAt(tap.x, tap.y);
+      if (idx !== null) {
+        this.questMenu.setCursor(idx);
+        this.enterQuest(idx);
+      }
+      return;
+    }
+    const r = this.questMenu.handleKey(key!);
     if (r === 'cancel') {
       this.phase = 'area';
       return;
     }
-    if (r !== 'select') return;
-    if (!this.currentArea) return;
-    const quests = questsOf(this.currentArea.id);
-    const quest = quests[this.questMenu.cursor];
-    if (!quest) return;
-    const state = requireState(this.app);
-    if (!isStageUnlocked(quest, state.clearedStages)) return;
-    this.app.scenes.push(new StageScene(this.app, quest.id));
+    if (r === 'select') this.enterQuest(this.questMenu.cursor);
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
@@ -123,6 +174,7 @@ export class StageSelectScene implements Scene {
     const prog = areaProgress(area.id, state.clearedStages);
     drawWindow(ctx, 12, 12, view.w - 24, 52);
     drawText(ctx, `${area.name}  (${prog.done}/${prog.total})`, view.w / 2, 26, { align: 'center', color: '#ffd94a' });
+    this.backButton.draw(ctx);
     this.questMenu.draw(ctx, 12, 76, view.w - 24);
 
     const quests = questsOf(area.id);
@@ -152,7 +204,7 @@ export class StageSelectScene implements Scene {
           color: '#ffd94a',
         });
       }
-      drawText(ctx, 'Z/A: いどむ   X/B: マップへもどる', view.w - 32, dy + (p ? 84 : 78), {
+      drawText(ctx, 'クエストを タップで しゅつげき!', view.w - 32, dy + (p ? 84 : 78), {
         align: 'right',
         font: FONT_SMALL,
         color: '#aaaacc',
@@ -167,21 +219,10 @@ export class StageSelectScene implements Scene {
 
     drawWindow(ctx, 12, 12, view.w - 24, 52);
     drawText(ctx, 'ぼうけんマップ', view.w / 2, 26, { align: 'center', color: '#ffd94a' });
+    this.backButton.draw(ctx);
 
-    // ノード座標(縦持ち: 下から上へジグザグ / 横持ち: 左から右へジグザグ)
     const n = AREAS.length;
-    const nodes = AREAS.map((_, i) => {
-      if (p) {
-        return {
-          x: view.w / 2 + (i % 2 === 0 ? -85 : 85),
-          y: view.h - 220 - i * 86,
-        };
-      }
-      return {
-        x: 110 + (i * (view.w - 220)) / (n - 1),
-        y: 250 + (i % 2 === 0 ? 55 : -55),
-      };
-    });
+    const nodes = this.nodePositions();
 
     // ノード間の点線
     ctx.save();
@@ -247,7 +288,7 @@ export class StageSelectScene implements Scene {
     if (unlocked) {
       const lines = wrapText(ctx, area.desc, view.w - 80, FONT_SMALL);
       lines.forEach((line, i) => drawText(ctx, line, 32, dy + 14 + i * 24, { font: FONT_SMALL, color: '#ccccee' }));
-      drawText(ctx, 'Z/A: クエストをみる   X/B: もどる', view.w - 32, dy + (p ? 72 : 78), {
+      drawText(ctx, 'エリアを タップで しゅっぱつ!', view.w - 32, dy + (p ? 72 : 78), {
         align: 'right',
         font: FONT_SMALL,
         color: '#aaaacc',

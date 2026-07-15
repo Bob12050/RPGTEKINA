@@ -9,7 +9,7 @@ import { gachaLevel, MULTI_COST, MULTI_COUNT, pullOne, pullTen, RANK_RATES, SING
 import { createMonster } from '../game/monster';
 import { addMonster, markScouted } from '../game/state';
 import { drawMonster } from '../ui/sprites';
-import { drawText, drawWindow, FONT_BIG, FONT_SMALL, isPortrait, Menu, view } from '../ui/window';
+import { BackButton, Button, drawText, drawWindow, FONT_BIG, FONT_SMALL, isPortrait, view } from '../ui/window';
 
 type Phase = 'menu' | 'revealSingle' | 'revealMulti' | 'message';
 
@@ -37,29 +37,19 @@ const MULTI_STEP = 0.22;
 
 export class GachaScene implements Scene {
   private phase: Phase = 'menu';
-  private menu = new Menu([]);
+  private cursor = 0; // 0=単発 1=10連(キーボード用)
+  private singleButton = new Button();
+  private multiButton = new Button();
+  private backButton = new BackButton();
   private results: PullResult[] = [];
   private revealT = 0;
   private message = '';
   private time = 0;
 
-  constructor(private app: App) {
-    this.rebuildMenu();
-  }
+  constructor(private app: App) {}
 
   onEnter(): void {
     this.app.input.flush();
-  }
-
-  private rebuildMenu(): void {
-    const state = requireState(this.app);
-    const cursor = this.menu.cursor;
-    this.menu.setItems([
-      { label: 'たんぱつ ガチャ', note: `オーブ${SINGLE_COST}`, disabled: state.orbs < SINGLE_COST },
-      { label: '10れん ガチャ', note: `オーブ${MULTI_COST}`, disabled: state.orbs < MULTI_COST },
-      { label: 'やめる' },
-    ]);
-    this.menu.setCursor(cursor);
   }
 
   /** 空きスロット(パーティ+ぼくじょう)の数 */
@@ -92,43 +82,49 @@ export class GachaScene implements Scene {
     });
     this.revealT = 0;
     this.phase = count === 1 ? 'revealSingle' : 'revealMulti';
-    this.rebuildMenu();
   }
 
   update(dt: number): void {
     this.time += dt;
     if (this.phase === 'revealSingle' || this.phase === 'revealMulti') this.revealT += dt;
+    const tap = this.app.input.takeTap();
     const key = this.app.input.poll();
-    if (!key) return;
+    if (!tap && !key) return;
 
     switch (this.phase) {
       case 'menu': {
-        const r = this.menu.handleKey(key);
-        if (r === 'cancel') {
+        if (tap) {
+          if (this.backButton.contains(tap.x, tap.y)) this.app.scenes.pop();
+          else if (this.singleButton.contains(tap.x, tap.y)) this.doPull(1);
+          else if (this.multiButton.contains(tap.x, tap.y)) this.doPull(MULTI_COUNT);
+          return;
+        }
+        if (key === 'cancel') {
           this.app.scenes.pop();
           return;
         }
-        if (r !== 'select') return;
-        if (this.menu.cursor === 0) this.doPull(1);
-        else if (this.menu.cursor === 1) this.doPull(MULTI_COUNT);
-        else this.app.scenes.pop();
+        if (key === 'up' || key === 'down' || key === 'left' || key === 'right') {
+          this.cursor = 1 - this.cursor;
+          return;
+        }
+        if (key === 'confirm') this.doPull(this.cursor === 0 ? 1 : MULTI_COUNT);
         break;
       }
       case 'revealSingle': {
-        if (key !== 'confirm' && key !== 'cancel') return;
+        if (!tap && key !== 'confirm' && key !== 'cancel') return;
         if (this.revealT < SINGLE_DELAY) this.revealT = SINGLE_DELAY; // タメをスキップ
         else this.phase = 'menu';
         break;
       }
       case 'revealMulti': {
-        if (key !== 'confirm' && key !== 'cancel') return;
+        if (!tap && key !== 'confirm' && key !== 'cancel') return;
         const fullReveal = SINGLE_DELAY + MULTI_COUNT * MULTI_STEP;
         if (this.revealT < fullReveal) this.revealT = fullReveal; // 全公開へスキップ
         else this.phase = 'menu';
         break;
       }
       case 'message': {
-        if (key === 'confirm' || key === 'cancel') this.phase = 'menu';
+        if (tap || key === 'confirm' || key === 'cancel') this.phase = 'menu';
         break;
       }
     }
@@ -148,14 +144,29 @@ export class GachaScene implements Scene {
 
     // ヘッダー
     drawWindow(ctx, 12, 12, view.w - 24, 52);
-    drawText(ctx, 'モンスターガチャ', p ? 28 : 40, 26, { color: '#ffd94a', font: FONT_SMALL });
-    drawText(ctx, `オーブ ${state.orbs}`, view.w - (p ? 28 : 40), 26, { align: 'right', color: '#8fd4ff', font: FONT_SMALL });
+    drawText(ctx, 'モンスターガチャ', p ? 80 : 90, 26, { color: '#ffd94a', font: FONT_SMALL });
+    drawText(ctx, `💎 ${state.orbs}`, view.w - (p ? 28 : 40), 26, { align: 'right', color: '#8fd4ff', font: FONT_SMALL });
 
     if (this.phase === 'menu' || this.phase === 'message') {
-      this.menu.draw(ctx, p ? 12 : 24, 84, p ? view.w - 24 : 360, 'ガチャをまわす');
+      this.backButton.draw(ctx);
+      // 大きなガチャボタン
+      const bx = p ? 14 : 24;
+      const bw = p ? view.w - 28 : 380;
+      this.singleButton.draw(ctx, bx, 82, bw, 86, 'たんぱつ ガチャ', {
+        color: '#2c4a80',
+        sub: `オーブ ${SINGLE_COST}`,
+        selected: this.cursor === 0,
+        disabled: state.orbs < SINGLE_COST,
+      });
+      this.multiButton.draw(ctx, bx, 180, bw, 100, '✨ 10れん ガチャ ✨', {
+        color: '#7a3ad6',
+        sub: `オーブ ${MULTI_COST} ・ ★4いじょう 1たい かくてい!`,
+        selected: this.cursor === 1,
+        disabled: state.orbs < MULTI_COST,
+      });
 
       // 排出率の案内
-      const iy = p ? 260 : 84;
+      const iy = p ? 300 : 82;
       const ix = p ? 12 : 420;
       const iw = p ? view.w - 24 : view.w - 444;
       drawWindow(ctx, ix, iy, iw, p ? 210 : 240);
@@ -247,7 +258,7 @@ export class GachaScene implements Scene {
       font: FONT_SMALL,
       color: '#ccccee',
     });
-    drawText(ctx, 'Z/A: もどる', cx, view.h - 60, { align: 'center', font: FONT_SMALL, color: '#aaaacc' });
+    drawText(ctx, 'タップで もどる', cx, view.h - 60, { align: 'center', font: FONT_SMALL, color: '#aaaacc' });
   }
 
   private drawMulti(ctx: CanvasRenderingContext2D): void {
@@ -290,7 +301,7 @@ export class GachaScene implements Scene {
     });
 
     const allRevealed = this.revealT >= SINGLE_DELAY + MULTI_COUNT * MULTI_STEP;
-    drawText(ctx, allRevealed ? 'Z/A: もどる' : 'Z/A: いっきに ひらく', view.w / 2, top + rowH * MULTI_COUNT + 44, {
+    drawText(ctx, allRevealed ? 'タップで もどる' : 'タップで いっきに ひらく', view.w / 2, top + rowH * MULTI_COUNT + 44, {
       align: 'center',
       font: FONT_SMALL,
       color: '#aaaacc',

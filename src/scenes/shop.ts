@@ -5,10 +5,11 @@ import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
 import { getItem, SHOP_ITEMS } from '../data/items';
 import { addItem } from '../game/state';
-import { drawText, drawWindow, FONT_SMALL, Menu, MessageBox, view, isPortrait, wrapText } from '../ui/window';
+import { BackButton, drawText, drawWindow, FONT_SMALL, Menu, MessageBox, view, isPortrait, wrapText } from '../ui/window';
 
 export class ShopScene implements Scene {
   private menu: Menu;
+  private backButton = new BackButton();
   private messages = new MessageBox();
   private showingMessage = false;
 
@@ -25,26 +26,9 @@ export class ShopScene implements Scene {
     this.app.input.flush();
   }
 
-  update(dt: number): void {
-    this.messages.update(dt);
-    const key = this.app.input.poll();
-    if (!key) return;
-
-    if (this.showingMessage) {
-      if (key === 'confirm' || key === 'cancel') {
-        if (this.messages.advance()) this.showingMessage = false;
-      }
-      return;
-    }
-
-    const r = this.menu.handleKey(key);
-    if (r === 'cancel') {
-      this.app.scenes.pop();
-      return;
-    }
-    if (r !== 'select') return;
+  private buy(index: number): void {
     const state = requireState(this.app);
-    const itemId = SHOP_ITEMS[this.menu.cursor];
+    const itemId = SHOP_ITEMS[index];
     if (!itemId) return;
     const item = getItem(itemId);
     if (state.gold < item.price) {
@@ -55,6 +39,40 @@ export class ShopScene implements Scene {
       this.messages.setPages([`${item.name}を かった! (しょじ ×${state.items[itemId]})`]);
     }
     this.showingMessage = true;
+  }
+
+  update(dt: number): void {
+    this.messages.update(dt);
+    const tap = this.app.input.takeTap();
+    const key = this.app.input.poll();
+    if (!tap && !key) return;
+
+    if (this.showingMessage) {
+      if (tap || key === 'confirm' || key === 'cancel') {
+        if (this.messages.advance()) this.showingMessage = false;
+      }
+      return;
+    }
+
+    if (tap) {
+      if (this.backButton.contains(tap.x, tap.y)) {
+        this.app.scenes.pop();
+        return;
+      }
+      const idx = this.menu.itemAt(tap.x, tap.y);
+      if (idx !== null) {
+        this.menu.setCursor(idx);
+        this.buy(idx);
+      }
+      return;
+    }
+
+    const r = this.menu.handleKey(key!);
+    if (r === 'cancel') {
+      this.app.scenes.pop();
+      return;
+    }
+    if (r === 'select') this.buy(this.menu.cursor);
   }
 
   draw(ctx: CanvasRenderingContext2D): void {

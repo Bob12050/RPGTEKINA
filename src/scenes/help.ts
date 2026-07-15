@@ -3,18 +3,18 @@
 // ============================================================
 import type { App } from '../core/app';
 import type { Scene } from '../core/scene';
-import { drawText, drawWindow, FONT, FONT_SMALL, view, isPortrait, wrapText } from '../ui/window';
+import { Button, drawText, drawWindow, FONT, FONT_SMALL, view, isPortrait, wrapText } from '../ui/window';
 
 const PAGES: string[][] = [
   [
     '【そうさ】',
-    '・やじるしキー / WASD … カーソルいどう',
-    '・Z / Enter / スペース … けってい',
-    '・X / Esc … もどる・キャンセル',
-    '・スマホ: 十字パッドで えらぶ、A=けってい、B=もどる',
+    'ぜんぶ タップで OK!',
+    '・ボタンや メニューを タップ → けってい',
+    '・「◀」ボタンを タップ → もどる',
+    '・PCは クリック か 矢印キー + Z / Xでも あそべる',
     '',
-    'きょてん(ホーム)から すべての メニューを ひらく。',
-    'ガチャ・どうぐ・ぼくじょう・ショップ・かいふく・ずかん。',
+    'きょてん(ホーム)の 9つの ボタンから すべての',
+    'きのうへ とべる。パーティの わくを タップで つよさ!',
   ],
   [
     '【クエスト】',
@@ -46,10 +46,22 @@ const PAGES: string[][] = [
 
 export class HelpScene implements Scene {
   private page = 0;
+  private closeButton = new Button();
 
   constructor(private app: App) {}
 
+  private next(): void {
+    this.page += 1;
+    if (this.page >= PAGES.length) this.app.scenes.pop();
+  }
+
   update(): void {
+    const tap = this.app.input.takeTap();
+    if (tap) {
+      if (this.closeButton.contains(tap.x, tap.y)) this.app.scenes.pop();
+      else this.next(); // どこをタップしても つぎのページへ
+      return;
+    }
     const key = this.app.input.poll();
     if (!key) return;
     if (key === 'cancel') {
@@ -57,8 +69,7 @@ export class HelpScene implements Scene {
       return;
     }
     if (key === 'confirm' || key === 'right' || key === 'down') {
-      this.page += 1;
-      if (this.page >= PAGES.length) this.app.scenes.pop();
+      this.next();
     } else if (key === 'left' || key === 'up') {
       this.page = Math.max(0, this.page - 1);
     }
@@ -85,7 +96,8 @@ export class HelpScene implements Scene {
         ly += lineH;
       }
     });
-    drawText(ctx, `${this.page + 1} / ${PAGES.length}  (A: つぎへ / B: とじる)`, x + w / 2, y + h - 36, {
+    this.closeButton.draw(ctx, x + w - 62, y + 12, 50, 42, '✕', { color: '#3a3a55', font: FONT_SMALL });
+    drawText(ctx, `${this.page + 1} / ${PAGES.length}  (タップで つぎへ)`, x + w / 2, y + h - 36, {
       align: 'center',
       font: FONT_SMALL,
       color: '#aaaacc',

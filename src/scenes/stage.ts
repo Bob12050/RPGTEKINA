@@ -12,7 +12,7 @@ import { getStage, repeatGold } from '../data/stages';
 import type { BattleResult, EnemySpec } from '../game/battle';
 import { createMonster, maxStats } from '../game/monster';
 import { addItem, addMonster, healParty, markScouted, markStageCleared } from '../game/state';
-import { drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, isPortrait, MessageBox, view } from '../ui/window';
+import { Button, drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, isPortrait, MessageBox, view } from '../ui/window';
 import { BattleScene } from './battle';
 
 type Phase = 'intro' | 'clear' | 'failed';
@@ -20,6 +20,8 @@ type Phase = 'intro' | 'clear' | 'failed';
 export class StageScene implements Scene {
   private phase: Phase = 'intro';
   private messages = new MessageBox();
+  private startButton = new Button();
+  private backButton = new Button();
   private time = 0;
 
   constructor(
@@ -110,20 +112,26 @@ export class StageScene implements Scene {
   update(dt: number): void {
     this.time += dt;
     this.messages.update(dt);
+    const tap = this.app.input.takeTap();
     const key = this.app.input.poll();
 
     switch (this.phase) {
       case 'intro':
+        if (tap) {
+          if (this.startButton.contains(tap.x, tap.y)) this.startStage();
+          else if (this.backButton.contains(tap.x, tap.y)) this.app.scenes.pop();
+          return;
+        }
         if (key === 'confirm') this.startStage();
         else if (key === 'cancel') this.app.scenes.pop();
         break;
       case 'clear':
-        if (key === 'confirm' || key === 'cancel') {
+        if (tap || key === 'confirm' || key === 'cancel') {
           if (this.messages.advance()) this.app.scenes.pop();
         }
         break;
       case 'failed':
-        if (key === 'confirm' || key === 'cancel') {
+        if (tap || key === 'confirm' || key === 'cancel') {
           if (this.messages.advance()) {
             healParty(requireState(this.app)); // 敗北後は無料で全回復してセレクトへ
             this.app.scenes.pop();
@@ -168,8 +176,16 @@ export class StageScene implements Scene {
 
       this.drawPartyStatus(ctx, cx, p ? 230 : 280);
 
-      drawWindow(ctx, cx - (p ? 180 : 220), view.h - 90, p ? 360 : 440, 60);
-      drawText(ctx, 'Z/A: はじめる    X/B: もどる', cx, view.h - 72, { align: 'center', font: FONT_SMALL });
+      // 大きな出撃ボタン + もどる
+      const bw = Math.min(430, view.w - 24);
+      const bx = cx - bw / 2;
+      const by = view.h - 96;
+      const backW = 120;
+      this.backButton.draw(ctx, bx, by, backW, 72, 'もどる', { color: '#3a3a55', font: FONT_SMALL });
+      this.startButton.draw(ctx, bx + backW + 10, by, bw - backW - 10, 72, stage.boss ? '👑 ボスに いどむ!' : 'しゅつげき!', {
+        color: stage.boss ? '#a8402e' : '#2c6a4f',
+        selected: true,
+      });
       return;
     }
 

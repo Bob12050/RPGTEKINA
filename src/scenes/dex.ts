@@ -12,7 +12,7 @@ import { SPECIES } from '../data/monsters';
 import { inGachaPool } from '../data/gacha';
 import { STAGES } from '../data/stages';
 import { drawGridSprite, drawMonster, FAMILY_SPRITES } from '../ui/sprites';
-import { drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
+import { BackButton, drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
 
 /** 入手ヒント: ガチャ排出か、クエストドロップか */
 function obtainHint(speciesId: string): string | null {
@@ -27,6 +27,7 @@ type Knowledge = 'unknown' | 'seen' | 'scouted';
 
 export class DexScene implements Scene {
   private menu: Menu;
+  private backButton = new BackButton();
   private time = 0;
 
   constructor(private app: App) {
@@ -60,6 +61,16 @@ export class DexScene implements Scene {
 
   update(dt: number): void {
     this.time += dt;
+    const tap = this.app.input.takeTap();
+    if (tap) {
+      if (this.backButton.contains(tap.x, tap.y)) {
+        this.app.scenes.pop();
+        return;
+      }
+      const idx = this.menu.itemAt(tap.x, tap.y);
+      if (idx !== null) this.menu.setCursor(idx); // タップした種族の詳細を表示
+      return;
+    }
     const key = this.app.input.poll();
     if (!key) return;
     const r = this.menu.handleKey(key);
@@ -72,23 +83,24 @@ export class DexScene implements Scene {
     ctx.fillRect(0, 0, view.w, view.h);
     const state = requireState(this.app);
     const p = isPortrait();
-    this.menu.visibleCount = p ? 6 : 13;
+    this.menu.visibleCount = p ? 5 : 10;
 
     // ヘッダー(コンプリート率)
     const validIds = new Set(SPECIES.map((s) => s.id));
     const seen = state.seenSpecies.filter((id) => validIds.has(id)).length;
     const scouted = state.scoutedSpecies.filter((id) => validIds.has(id)).length;
     drawWindow(ctx, 12, 12, view.w - 24, 52);
-    drawText(ctx, 'モンスターずかん', p ? 28 : 40, 26, { color: '#ffd94a', font: FONT_SMALL });
+    drawText(ctx, 'ずかん', p ? 80 : 90, 26, { color: '#ffd94a', font: FONT_SMALL });
     drawText(ctx, `はっけん ${seen}/${SPECIES.length}  なかま ${scouted}/${SPECIES.length}`, view.w - (p ? 24 : 40), 26, {
       align: 'right',
       font: FONT_SMALL,
     });
+    this.backButton.draw(ctx);
 
     // リストと詳細
     if (p) {
-      this.menu.draw(ctx, 12, 76, view.w - 24);
-      this.drawDetail(ctx, 12, 302, view.w - 24, view.h - 314);
+      const mh = this.menu.draw(ctx, 12, 76, view.w - 24);
+      this.drawDetail(ctx, 12, 76 + mh + 8, view.w - 24, view.h - (76 + mh + 8) - 12);
     } else {
       this.menu.draw(ctx, 12, 76, 380);
       this.drawDetail(ctx, 404, 76, view.w - 416, 520);

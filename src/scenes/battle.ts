@@ -19,13 +19,19 @@ import { gainExp } from '../game/monster';
 import { consumeItem, markSeen } from '../game/state';
 import { drawMonster } from '../ui/sprites';
 import {
+  Button,
   drawGauge,
   drawText,
   drawWindow,
   FONT_SMALL,
   hpColor,
+  inRect,
   Menu,
-  MessageBox, view, isPortrait } from '../ui/window';
+  MessageBox,
+  view,
+  isPortrait,
+  type Rect,
+} from '../ui/window';
 
 /** 最終ボス。撃破で世界に平和が訪れる(専用演出) */
 const FINAL_BOSS_ID = 'tekina';
@@ -52,19 +58,26 @@ type TargetContext =
   | { mode: 'skill'; skillId: string }
   | { mode: 'item'; itemId: string };
 
-/** メッセージウィンドウの位置(画面の向きで変わるため毎回計算) */
-function msgRect(): { x: number; y: number; w: number; h: number } {
+/** 画面下部の操作エリア(メッセージ/コマンドボタン共用)の位置 */
+function msgRect(): Rect {
   const m = isPortrait() ? 8 : 16;
   const h = isPortrait() ? 112 : 124;
   return { x: m, y: view.h - h - m, w: view.w - m * 2, h };
 }
 
+/** コマンドボタンの配色 */
+const CMD_COLORS = ['#a8402e', '#2c6a4f', '#2c4a80'] as const; // たたかう/どうぐ/にげる
+const ACT_COLORS = ['#a8402e', '#7a3ad6', '#2c4a80'] as const; // こうげき/とくぎ/ぼうぎょ
+
 export class BattleScene implements Scene {
   private battle: Battle;
   private onComplete: (result: BattleResult) => void;
   private phase: Phase = 'playback';
-  private mainMenu = new Menu([{ label: 'たたかう' }, { label: 'どうぐ' }, { label: 'にげる' }]);
-  private actionMenu = new Menu([{ label: 'こうげき' }, { label: 'とくぎ' }, { label: 'ぼうぎょ' }]);
+  private cmdCursor = 0;
+  private actCursor = 0;
+  private cmdButtons = [new Button(), new Button(), new Button()]; // たたかう/どうぐ/にげる
+  private actButtons = [new Button(), new Button(), new Button()]; // こうげき/とくぎ/ぼうぎょ
+  private backButton = new Button();
   private skillMenu = new Menu([]);
   private itemMenu = new Menu([]);
   private allyMenu = new Menu([]);
@@ -111,12 +124,13 @@ export class BattleScene implements Scene {
       this.shake.t -= dt;
       if (this.shake.t <= 0) this.shake = null;
     }
+    const tap = this.app.input.takeTap();
     const key = this.app.input.poll();
 
     switch (this.phase) {
       case 'playback': {
         if (this.waitingMessage) {
-          if (key === 'confirm' || key === 'cancel') {
+          if (tap || key === 'confirm' || key === 'cancel') {
             if (!this.messages.currentPageComplete) {
               this.messages.advance(); // タイプ表示中なら即全文表示
               return;
@@ -130,149 +144,243 @@ export class BattleScene implements Scene {
         break;
       }
       case 'command': {
-        if (!key) return;
-        const r = this.mainMenu.handleKey(key);
-        if (r !== 'select') return;
-        switch (this.mainMenu.cursor) {
-          case 0: // たたかう
-            this.pendingActions.clear();
-            this.currentAllyIdx = 0;
-            this.advanceToNextAlly(true);
-            break;
-          case 1: // どうぐ
-            this.buildItemMenu();
-            this.phase = 'itemPick';
-            break;
-          case 2: // にげる
-            this.runTurn({ kind: 'flee' });
-            break;
+        if (tap) {
+          for (let i = 0; i < this.cmdButtons.length; i++) {
+            if (this.cmdButtons[i]!.contains(tap.x, tap.y)) {
+              this.cmdCursor = i;
+              this.runCommand(i);
+              return;
+            }
+          }
+          return;
         }
+        if (!key) return;
+        if (key === 'left' || key === 'up') this.cmdCursor = (this.cmdCursor + 2) % 3;
+        else if (key === 'right' || key === 'down') this.cmdCursor = (this.cmdCursor + 1) % 3;
+        else if (key === 'confirm') this.runCommand(this.cmdCursor);
         break;
       }
       case 'allyAction': {
-        if (!key) return;
-        const r = this.actionMenu.handleKey(key);
-        if (r === 'cancel') {
-          // ひとつ前の味方へ(いなければメインメニュー)
-          if (this.currentAllyIdx > 0) {
-            this.currentAllyIdx -= 1;
-            const prev = this.commandableAllies()[this.currentAllyIdx];
-            if (prev) this.pendingActions.delete(prev.id);
-            this.actionMenu.cursor = 0;
-          } else {
-            this.phase = 'command';
+        if (tap) {
+          if (this.backButton.contains(tap.x, tap.y)) {
+            this.backFromAllyAction();
+            return;
+          }
+          for (let i = 0; i < this.actButtons.length; i++) {
+            if (this.actButtons[i]!.contains(tap.x, tap.y)) {
+              this.actCursor = i;
+              this.runAction(i);
+              return;
+            }
           }
           return;
         }
-        if (r !== 'select') return;
-        switch (this.actionMenu.cursor) {
-          case 0: // こうげき
-            this.targetCtx = { mode: 'attack' };
-            this.targetIdx = 0;
-            this.phase = 'targetEnemy';
-            break;
-          case 1: {
-            this.buildSkillMenu();
-            this.phase = 'skillPick';
-            break;
-          }
-          case 2: // ぼうぎょ
-            this.setAllyAction({ kind: 'guard' });
-            break;
-        }
+        if (!key) return;
+        if (key === 'left' || key === 'up') this.actCursor = (this.actCursor + 2) % 3;
+        else if (key === 'right' || key === 'down') this.actCursor = (this.actCursor + 1) % 3;
+        else if (key === 'confirm') this.runAction(this.actCursor);
+        else if (key === 'cancel') this.backFromAllyAction();
         break;
       }
       case 'skillPick': {
-        if (!key) return;
-        const r = this.skillMenu.handleKey(key);
-        if (r === 'cancel') {
-          this.phase = 'allyAction';
+        if (tap) {
+          if (this.backButton.contains(tap.x, tap.y)) {
+            this.phase = 'allyAction';
+            return;
+          }
+          const idx = this.skillMenu.itemAt(tap.x, tap.y);
+          if (idx !== null) {
+            this.skillMenu.setCursor(idx);
+            this.pickSkill(idx);
+          }
           return;
         }
-        if (r !== 'select') return;
-        const ally = this.currentAlly();
-        if (!ally) return;
-        const skillId = ally.skillIds[this.skillMenu.cursor];
-        if (!skillId) return;
-        const skill = getSkill(skillId);
-        const eff = skill.effect;
-        if (eff.kind === 'attack' && eff.target === 'single') {
-          this.targetCtx = { mode: 'skill', skillId };
-          this.targetIdx = 0;
-          this.phase = 'targetEnemy';
-        } else if (eff.kind === 'debuff' && eff.target === 'single') {
-          this.targetCtx = { mode: 'skill', skillId };
-          this.targetIdx = 0;
-          this.phase = 'targetEnemy';
-        } else if ((eff.kind === 'heal' || eff.kind === 'buff') && eff.target === 'single') {
-          this.targetCtx = { mode: 'skill', skillId };
-          this.buildAllyMenu();
-          this.phase = 'targetAlly';
-        } else {
-          this.setAllyAction({ kind: 'skill', skillId });
-        }
+        if (!key) return;
+        const r = this.skillMenu.handleKey(key);
+        if (r === 'cancel') this.phase = 'allyAction';
+        else if (r === 'select') this.pickSkill(this.skillMenu.cursor);
         break;
       }
       case 'itemPick': {
-        if (!key) return;
-        const r = this.itemMenu.handleKey(key);
-        if (r === 'cancel') {
-          this.phase = 'command';
+        if (tap) {
+          if (this.backButton.contains(tap.x, tap.y)) {
+            this.phase = 'command';
+            return;
+          }
+          const idx = this.itemMenu.itemAt(tap.x, tap.y);
+          if (idx !== null) {
+            this.itemMenu.setCursor(idx);
+            this.pickBattleItem(idx);
+          }
           return;
         }
-        if (r !== 'select') return;
-        const state = requireState(this.app);
-        const ids = Object.keys(state.items).filter((id) => (state.items[id] ?? 0) > 0);
-        const itemId = ids[this.itemMenu.cursor];
-        if (!itemId) return;
-        const item = getItem(itemId);
-        this.targetCtx = { mode: 'item', itemId };
-        this.buildAllyMenu(item.effect.kind === 'revive');
-        this.phase = 'targetAlly';
+        if (!key) return;
+        const r = this.itemMenu.handleKey(key);
+        if (r === 'cancel') this.phase = 'command';
+        else if (r === 'select') this.pickBattleItem(this.itemMenu.cursor);
         break;
       }
       case 'targetEnemy': {
-        if (!key) return;
         const targets = this.battle.aliveEnemies();
+        if (tap) {
+          if (this.backButton.contains(tap.x, tap.y)) {
+            this.phase = this.targetCtx.mode === 'skill' ? 'skillPick' : 'allyAction';
+            return;
+          }
+          // 敵を直接タップしてターゲット決定
+          for (const { unit, rect } of this.enemyHitAreas()) {
+            if (inRect(tap.x, tap.y, rect)) {
+              this.chooseEnemyTarget(unit.id);
+              return;
+            }
+          }
+          return;
+        }
+        if (!key) return;
         if (key === 'left' || key === 'up') this.targetIdx = (this.targetIdx - 1 + targets.length) % targets.length;
         else if (key === 'right' || key === 'down') this.targetIdx = (this.targetIdx + 1) % targets.length;
         else if (key === 'cancel') {
           this.phase = this.targetCtx.mode === 'skill' ? 'skillPick' : 'allyAction';
         } else if (key === 'confirm') {
           const target = targets[Math.min(this.targetIdx, targets.length - 1)];
-          if (!target) return;
-          if (this.targetCtx.mode === 'skill') {
-            this.setAllyAction({ kind: 'skill', skillId: this.targetCtx.skillId, targetId: target.id });
-          } else {
-            this.setAllyAction({ kind: 'attack', targetId: target.id });
-          }
+          if (target) this.chooseEnemyTarget(target.id);
         }
         break;
       }
       case 'targetAlly': {
-        if (!key) return;
-        const r = this.allyMenu.handleKey(key);
-        if (r === 'cancel') {
-          this.phase = this.targetCtx.mode === 'item' ? 'itemPick' : 'skillPick';
+        if (tap) {
+          if (this.backButton.contains(tap.x, tap.y)) {
+            this.phase = this.targetCtx.mode === 'item' ? 'itemPick' : 'skillPick';
+            return;
+          }
+          const idx = this.allyMenu.itemAt(tap.x, tap.y);
+          if (idx !== null) {
+            this.allyMenu.setCursor(idx);
+            this.chooseAllyTarget(idx);
+          }
           return;
         }
-        if (r !== 'select') return;
-        const ally = this.battle.allies[this.allyMenu.cursor];
-        if (!ally) return;
-        if (this.targetCtx.mode === 'item') {
-          const state = requireState(this.app);
-          consumeItem(state, this.targetCtx.itemId);
-          this.runTurn({ kind: 'item', itemId: this.targetCtx.itemId, targetAllyId: ally.id });
-        } else if (this.targetCtx.mode === 'skill') {
-          this.setAllyAction({ kind: 'skill', skillId: this.targetCtx.skillId, targetId: ally.id });
-        }
+        if (!key) return;
+        const r = this.allyMenu.handleKey(key);
+        if (r === 'cancel') this.phase = this.targetCtx.mode === 'item' ? 'itemPick' : 'skillPick';
+        else if (r === 'select') this.chooseAllyTarget(this.allyMenu.cursor);
         break;
       }
       case 'finished': {
-        if (key === 'confirm' || key === 'cancel') this.exitBattle();
+        if (tap || key === 'confirm' || key === 'cancel') this.exitBattle();
         break;
       }
     }
+  }
+
+  // ---- コマンド実行(タップ/キー共通) ----
+
+  private runCommand(i: number): void {
+    switch (i) {
+      case 0: // たたかう
+        this.pendingActions.clear();
+        this.currentAllyIdx = 0;
+        this.advanceToNextAlly(true);
+        break;
+      case 1: // どうぐ
+        this.buildItemMenu();
+        this.phase = 'itemPick';
+        break;
+      case 2: // にげる
+        this.runTurn({ kind: 'flee' });
+        break;
+    }
+  }
+
+  private runAction(i: number): void {
+    switch (i) {
+      case 0: // こうげき
+        this.targetCtx = { mode: 'attack' };
+        this.targetIdx = 0;
+        this.phase = 'targetEnemy';
+        break;
+      case 1:
+        this.buildSkillMenu();
+        this.phase = 'skillPick';
+        break;
+      case 2: // ぼうぎょ
+        this.setAllyAction({ kind: 'guard' });
+        break;
+    }
+  }
+
+  /** 行動選択から1つ前へもどる(前の味方 or コマンドへ) */
+  private backFromAllyAction(): void {
+    if (this.currentAllyIdx > 0) {
+      this.currentAllyIdx -= 1;
+      const prev = this.commandableAllies()[this.currentAllyIdx];
+      if (prev) this.pendingActions.delete(prev.id);
+      this.actCursor = 0;
+    } else {
+      this.phase = 'command';
+    }
+  }
+
+  private pickSkill(index: number): void {
+    const ally = this.currentAlly();
+    if (!ally) return;
+    const skillId = ally.skillIds[index];
+    if (!skillId) return;
+    const skill = getSkill(skillId);
+    const eff = skill.effect;
+    if ((eff.kind === 'attack' || eff.kind === 'debuff') && eff.target === 'single') {
+      this.targetCtx = { mode: 'skill', skillId };
+      this.targetIdx = 0;
+      this.phase = 'targetEnemy';
+    } else if ((eff.kind === 'heal' || eff.kind === 'buff') && eff.target === 'single') {
+      this.targetCtx = { mode: 'skill', skillId };
+      this.buildAllyMenu();
+      this.phase = 'targetAlly';
+    } else {
+      this.setAllyAction({ kind: 'skill', skillId });
+    }
+  }
+
+  private pickBattleItem(index: number): void {
+    const state = requireState(this.app);
+    const ids = Object.keys(state.items).filter((id) => (state.items[id] ?? 0) > 0);
+    const itemId = ids[index];
+    if (!itemId) return;
+    const item = getItem(itemId);
+    this.targetCtx = { mode: 'item', itemId };
+    this.buildAllyMenu(item.effect.kind === 'revive');
+    this.phase = 'targetAlly';
+  }
+
+  private chooseEnemyTarget(unitId: string): void {
+    if (this.targetCtx.mode === 'skill') {
+      this.setAllyAction({ kind: 'skill', skillId: this.targetCtx.skillId, targetId: unitId });
+    } else {
+      this.setAllyAction({ kind: 'attack', targetId: unitId });
+    }
+  }
+
+  private chooseAllyTarget(index: number): void {
+    const ally = this.battle.allies[index];
+    if (!ally) return;
+    if (this.allyMenu.items[index]?.disabled) return;
+    if (this.targetCtx.mode === 'item') {
+      const state = requireState(this.app);
+      consumeItem(state, this.targetCtx.itemId);
+      this.runTurn({ kind: 'item', itemId: this.targetCtx.itemId, targetAllyId: ally.id });
+    } else if (this.targetCtx.mode === 'skill') {
+      this.setAllyAction({ kind: 'skill', skillId: this.targetCtx.skillId, targetId: ally.id });
+    }
+  }
+
+  /** 敵スプライトのタップ判定領域(名前・ゲージ込みでゆったりめ) */
+  private enemyHitAreas(): { unit: BattleUnit; rect: Rect }[] {
+    const scale = this.battle.isBossWave() ? 9 : 6;
+    const size = 16 * scale;
+    return this.enemyPositions().map(({ unit, x, y }) => ({
+      unit,
+      rect: { x: x - 10, y: y - 54, w: size + 20, h: size + 64 },
+    }));
   }
 
   /** コマンド入力対象の味方(生存中) */
@@ -298,7 +406,7 @@ export class BattleScene implements Scene {
       this.runTurn({ kind: 'fight', actions: this.pendingActions });
       return;
     }
-    this.actionMenu.cursor = 0;
+    this.actCursor = 0;
     this.phase = 'allyAction';
   }
 
@@ -368,7 +476,7 @@ export class BattleScene implements Scene {
     if (this.battle.result) return; // end イベント待ち
     this.messages.setPages([]); // コマンド選択中は前のメッセージを消す
     this.phase = 'command';
-    this.mainMenu.cursor = 0;
+    this.cmdCursor = 0;
   }
 
   /** 勝利・敗北・逃走後のメッセージを積む */
@@ -450,21 +558,54 @@ export class BattleScene implements Scene {
     this.drawEnemies(ctx);
     this.drawAllyPanels(ctx);
 
-    // コマンド類(縦持ちでは下側にまとめる)
+    // ---- 下部の操作エリア(大きなタップボタン) ----
     const p = isPortrait();
+    const area = msgRect();
+    const gap = 8;
+
     if (this.phase === 'command') {
-      this.mainMenu.draw(ctx, p ? 10 : 16, p ? 348 : 210, 210, 'コマンド');
+      const bw = Math.floor((area.w - gap * 2) / 3);
+      const labels = ['たたかう', 'どうぐ', 'にげる'];
+      labels.forEach((label, i) => {
+        this.cmdButtons[i]!.draw(ctx, area.x + i * (bw + gap), area.y, bw, area.h, label, {
+          color: CMD_COLORS[i],
+          selected: i === this.cmdCursor,
+        });
+      });
     }
+
     if (this.phase === 'allyAction') {
       const ally = this.currentAlly();
-      this.actionMenu.draw(ctx, p ? 10 : 16, p ? 358 : 230, 240, ally ? `${ally.name} は?` : '');
+      if (ally) {
+        drawText(ctx, `${ally.name}は どうする?`, view.w / 2, 12, { align: 'center', font: FONT_SMALL, color: '#ffd94a' });
+      }
+      const backW = 84;
+      const bw = Math.floor((area.w - backW - gap * 3) / 3);
+      this.backButton.draw(ctx, area.x, area.y, backW, area.h, '◀', { color: '#3a3a55' });
+      const labels = ['こうげき', 'とくぎ', 'ぼうぎょ'];
+      labels.forEach((label, i) => {
+        this.actButtons[i]!.draw(ctx, area.x + backW + gap + i * (bw + gap), area.y, bw, area.h, label, {
+          color: ACT_COLORS[i],
+          selected: i === this.actCursor,
+          font: FONT_SMALL,
+        });
+      });
     }
-    if (this.phase === 'skillPick') this.skillMenu.draw(ctx, p ? 10 : 16, p ? 250 : 160, p ? view.w - 20 : 340, 'とくぎ');
-    if (this.phase === 'itemPick') this.itemMenu.draw(ctx, p ? 10 : 16, p ? 250 : 160, p ? view.w - 20 : 340, 'どうぐ');
-    if (this.phase === 'targetAlly') this.allyMenu.draw(ctx, p ? 10 : 16, p ? 300 : 200, p ? view.w - 20 : 380, 'だれに?');
+
+    if (this.phase === 'skillPick' || this.phase === 'itemPick') {
+      const menu = this.phase === 'skillPick' ? this.skillMenu : this.itemMenu;
+      menu.draw(ctx, p ? 10 : 16, p ? 230 : 130, p ? view.w - 20 : 380, this.phase === 'skillPick' ? 'とくぎを えらぶ' : 'どうぐを えらぶ');
+      this.backButton.draw(ctx, area.x, area.y, 130, area.h, '◀ もどる', { color: '#3a3a55', font: FONT_SMALL });
+    }
+
+    if (this.phase === 'targetAlly') {
+      this.allyMenu.draw(ctx, p ? 10 : 16, p ? 250 : 160, p ? view.w - 20 : 400, 'だれに?');
+      this.backButton.draw(ctx, area.x, area.y, 130, area.h, '◀ もどる', { color: '#3a3a55', font: FONT_SMALL });
+    }
+
     if (this.phase === 'targetEnemy') {
-      drawWindow(ctx, p ? 10 : 16, p ? 378 : 230, 220, 56);
-      drawText(ctx, 'どのてきに?', p ? 30 : 36, p ? 395 : 247);
+      this.backButton.draw(ctx, area.x, area.y, 130, area.h, '◀ もどる', { color: '#3a3a55', font: FONT_SMALL });
+      drawText(ctx, 'てきを タップ!', area.x + 150, area.y + area.h / 2 - 12, { color: '#ffd94a' });
     }
 
     // メッセージ

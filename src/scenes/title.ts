@@ -1,5 +1,5 @@
 // ============================================================
-// タイトル画面
+// タイトル画面(タップで えらぶ)
 // ============================================================
 import type { App } from '../core/app';
 import type { Scene } from '../core/scene';
@@ -7,34 +7,30 @@ import { getSpecies } from '../data/monsters';
 import { loadGame, hasSave } from '../game/save';
 import { newGame } from '../game/state';
 import { drawMonster } from '../ui/sprites';
-import { drawText, drawWindow, FONT_BIG, FONT_SMALL, Menu, view, isPortrait } from '../ui/window';
+import { Button, drawText, FONT_BIG, FONT_SMALL, view, isPortrait } from '../ui/window';
 import { HomeScene } from './home';
 import { HelpScene } from './help';
 
+const LABELS = ['はじめから', 'つづきから', 'あそびかた'] as const;
+
 export class TitleScene implements Scene {
-  private menu: Menu;
+  private cursor = 0;
+  private buttons = LABELS.map(() => new Button());
   private time = 0;
 
-  constructor(private app: App) {
-    this.menu = new Menu([
-      { label: 'はじめから' },
-      { label: 'つづきから', disabled: !hasSave() },
-      { label: 'あそびかた' },
-    ]);
+  constructor(private app: App) {}
+
+  private isDisabled(i: number): boolean {
+    return i === 1 && !hasSave();
   }
 
-  update(dt: number): void {
-    this.time += dt;
-    const key = this.app.input.poll();
-    if (!key) return;
-    const result = this.menu.handleKey(key);
-    if (result !== 'select') return;
-    switch (this.menu.cursor) {
-      case 0: {
+  private activate(i: number): void {
+    if (this.isDisabled(i)) return;
+    switch (i) {
+      case 0:
         this.app.state = newGame();
         this.app.scenes.replaceAll(new HomeScene(this.app));
         break;
-      }
       case 1: {
         const loaded = loadGame();
         if (loaded) {
@@ -47,6 +43,26 @@ export class TitleScene implements Scene {
         this.app.scenes.push(new HelpScene(this.app));
         break;
     }
+  }
+
+  update(dt: number): void {
+    this.time += dt;
+    const tap = this.app.input.takeTap();
+    if (tap) {
+      for (let i = 0; i < this.buttons.length; i++) {
+        if (this.buttons[i]!.contains(tap.x, tap.y)) {
+          this.cursor = i;
+          this.activate(i);
+          return;
+        }
+      }
+      return;
+    }
+    const key = this.app.input.poll();
+    if (!key) return;
+    if (key === 'up') this.cursor = (this.cursor + LABELS.length - 1) % LABELS.length;
+    else if (key === 'down') this.cursor = (this.cursor + 1) % LABELS.length;
+    else if (key === 'confirm') this.activate(this.cursor);
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
@@ -79,12 +95,24 @@ export class TitleScene implements Scene {
     drawMonster(ctx, dragon.family, dragon.palette, view.w / 2 - 40, 236 - bounce, 5);
     drawMonster(ctx, imp.family, imp.palette, view.w / 2 + spread - 40, 230 + bounce, 5);
 
-    this.menu.draw(ctx, view.w / 2 - 150, isPortrait() ? 430 : 400, 300);
-    const fw = Math.min(600, view.w - 16);
-    drawWindow(ctx, view.w / 2 - fw / 2, view.h - 80, fw, 56);
-    drawText(ctx, '↑↓: えらぶ   Z / A: けってい   X / B: もどる', view.w / 2, view.h - 63, {
+    // 大きなタップボタン
+    const bw = Math.min(340, view.w - 80);
+    const bh = 68;
+    const gapY = 16;
+    const startY = isPortrait() ? 420 : 380;
+    const colors = ['#a8402e', '#2c6a4f', '#2c4a80'];
+    LABELS.forEach((label, i) => {
+      this.buttons[i]!.draw(ctx, view.w / 2 - bw / 2, startY + i * (bh + gapY), bw, bh, label, {
+        color: colors[i],
+        selected: i === this.cursor,
+        disabled: this.isDisabled(i),
+      });
+    });
+
+    drawText(ctx, 'タップで えらんでね (PC: ↑↓ + Z/Enter)', view.w / 2, view.h - 52, {
       align: 'center',
       font: FONT_SMALL,
+      color: '#aaaacc',
     });
   }
 }

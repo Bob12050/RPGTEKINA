@@ -26,8 +26,9 @@ export class StatusScene implements Scene {
 
   update(dt: number): void {
     this.time += dt;
+    const tap = this.app.input.takeTap();
     const key = this.app.input.poll();
-    if (key === 'cancel' || key === 'confirm') this.app.scenes.pop();
+    if (tap || key === 'cancel' || key === 'confirm') this.app.scenes.pop();
   }
 
   draw(ctx: CanvasRenderingContext2D): void {

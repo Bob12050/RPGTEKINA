@@ -5,7 +5,6 @@
 import type { App } from './core/app';
 import { Input } from './core/input';
 import { SceneManager } from './core/scene';
-import { setupTouchControls } from './ui/touch';
 import { LANDSCAPE_H, LANDSCAPE_W, PORTRAIT_H, PORTRAIT_W, view } from './ui/window';
 import { TitleScene } from './scenes/title';
 
@@ -40,7 +39,16 @@ function boot(): void {
 
   const input = new Input();
   input.attach(window);
-  setupTouchControls(input); // スマホならタッチ操作UIを表示
+
+  // タップ/クリック → キャンバス内部座標に変換して入力キューへ
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    const x = ((e.clientX - r.left) / r.width) * canvas.width;
+    const y = ((e.clientY - r.top) / r.height) * canvas.height;
+    input.pushTap(x, y);
+  });
 
   const scenes = new SceneManager();
   const app: App = { input, scenes, state: null };
