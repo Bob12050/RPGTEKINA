@@ -23,19 +23,31 @@ export const FONT = '20px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu G
 export const FONT_SMALL = '16px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif';
 export const FONT_BIG = 'bold 34px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif';
 
-/** 黒地+白二重枠の DQ風ウィンドウ */
+/** スマホゲー風のカードウィンドウ(ドロップシャドウ+グラデ+上辺ハイライト) */
 export function drawWindow(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   ctx.save();
-  ctx.fillStyle = 'rgba(8, 8, 24, 0.92)';
-  roundRect(ctx, x, y, w, h, 8);
+  // ドロップシャドウ
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, 'rgba(30,34,62,0.96)');
+  g.addColorStop(1, 'rgba(13,15,32,0.96)');
+  roundRect(ctx, x, y, w, h, 14);
+  ctx.fillStyle = g;
   ctx.fill();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 3;
-  roundRect(ctx, x + 3, y + 3, w - 6, h - 6, 6);
-  ctx.stroke();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  roundRect(ctx, x + 7, y + 7, w - 14, h - 14, 4);
+  ctx.shadowColor = 'transparent';
+  // 上辺のうっすら光
+  const gloss = ctx.createLinearGradient(0, y, 0, y + 20);
+  gloss.addColorStop(0, 'rgba(255,255,255,0.10)');
+  gloss.addColorStop(1, 'rgba(255,255,255,0)');
+  roundRect(ctx, x + 2, y + 2, w - 4, 20, 12);
+  ctx.fillStyle = gloss;
+  ctx.fill();
+  // 枠線
+  ctx.strokeStyle = 'rgba(150,170,230,0.45)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, x + 0.75, y + 0.75, w - 1.5, h - 1.5, 13);
   ctx.stroke();
   ctx.restore();
 }
@@ -55,13 +67,18 @@ export function drawText(
   text: string,
   x: number,
   y: number,
-  options: { color?: string; font?: string; align?: CanvasTextAlign } = {},
+  options: { color?: string; font?: string; align?: CanvasTextAlign; shadow?: boolean } = {},
 ): void {
   ctx.save();
   ctx.font = options.font ?? FONT;
   ctx.fillStyle = options.color ?? '#ffffff';
   ctx.textAlign = options.align ?? 'left';
   ctx.textBaseline = 'top';
+  if (options.shadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.65)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 2;
+  }
   ctx.fillText(text, x, y);
   ctx.restore();
 }
@@ -90,7 +107,7 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   return lines;
 }
 
-/** HP/MPゲージ */
+/** HP/MPゲージ(丸型・ツヤつき) */
 export function drawGauge(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -101,13 +118,24 @@ export function drawGauge(
   color: string,
 ): void {
   ctx.save();
-  ctx.fillStyle = '#333344';
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, Math.max(0, Math.min(1, ratio)) * w, h);
-  ctx.strokeStyle = '#ffffff';
+  const r = Math.min(h / 2, 6);
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fillStyle = 'rgba(6,8,18,0.9)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.stroke();
+  const fw = Math.max(0, Math.min(1, ratio)) * (w - 3);
+  if (fw > 1) {
+    const ir = Math.min((h - 3) / 2, 5);
+    roundRect(ctx, x + 1.5, y + 1.5, fw, h - 3, ir);
+    ctx.fillStyle = color;
+    ctx.fill();
+    // 上半分のツヤ
+    roundRect(ctx, x + 1.5, y + 1.5, fw, (h - 3) / 2, ir);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -140,9 +168,11 @@ export interface ButtonOpts {
   sub?: string;
   /** ラベルの上に出す絵文字アイコン */
   icon?: string;
+  /** 外側に光をまとわせる(超レア・目玉ボタン用)。色文字列を渡す */
+  glow?: string;
 }
 
-/** タップできる大きめボタン。draw した位置を覚えて contains で判定する */
+/** タップできる大きめボタン(グラデ+ベベル+影)。draw した位置を覚えて contains で判定する */
 export class Button {
   rect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
@@ -150,15 +180,29 @@ export class Button {
     this.rect = { x, y, w, h };
     ctx.save();
     const base = opts.disabled ? '#31313f' : (opts.color ?? '#2c4a80');
+    // 影(グロー指定があれば色つきに)
+    ctx.shadowColor = opts.glow && !opts.disabled ? opts.glow : 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = opts.glow && !opts.disabled ? 20 : 8;
+    ctx.shadowOffsetY = opts.glow ? 0 : 3;
     roundRect(ctx, x, y, w, h, 14);
     ctx.fillStyle = base;
     ctx.fill();
-    // 上面のツヤ
-    ctx.fillStyle = opts.disabled ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.13)';
-    roundRect(ctx, x + 3, y + 3, w - 6, Math.max(8, h / 2 - 4), 11);
-    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    // ボタン内のグラデ(上明るく・下暗く)+ 底ベベル
+    ctx.save();
+    roundRect(ctx, x, y, w, h, 14);
+    ctx.clip();
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, 'rgba(255,255,255,0.20)');
+    g.addColorStop(0.45, 'rgba(255,255,255,0.04)');
+    g.addColorStop(1, 'rgba(0,0,0,0.10)');
+    ctx.fillStyle = opts.disabled ? 'rgba(255,255,255,0.03)' : g;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillRect(x, y + h - 6, w, 6); // 底ベベル
+    ctx.restore();
     ctx.lineWidth = opts.selected ? 4 : 2;
-    ctx.strokeStyle = opts.selected ? '#ffd94a' : opts.disabled ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = opts.selected ? '#ffd94a' : opts.disabled ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.75)';
     roundRect(ctx, x + 1.5, y + 1.5, w - 3, h - 3, 13);
     ctx.stroke();
 
@@ -168,12 +212,12 @@ export class Button {
     if (opts.icon) {
       // アイコン + ラベル(縦積み)
       drawText(ctx, opts.icon, cx, y + h / 2 - 34, { align: 'center', font: '30px sans-serif' });
-      drawText(ctx, label, cx, y + h / 2 + 6, { align: 'center', color: textColor, font: opts.font ?? FONT_SMALL });
+      drawText(ctx, label, cx, y + h / 2 + 6, { align: 'center', color: textColor, font: opts.font ?? FONT_SMALL, shadow: true });
     } else if (opts.sub) {
-      drawText(ctx, label, cx, y + h / 2 - 24, { align: 'center', color: textColor, font });
-      drawText(ctx, opts.sub, cx, y + h / 2 + 4, { align: 'center', color: opts.disabled ? '#8a8a99' : '#cfe0ff', font: FONT_SMALL });
+      drawText(ctx, label, cx, y + h / 2 - 24, { align: 'center', color: textColor, font, shadow: true });
+      drawText(ctx, opts.sub, cx, y + h / 2 + 4, { align: 'center', color: opts.disabled ? '#8a8a99' : '#dfeaff', font: FONT_SMALL });
     } else {
-      drawText(ctx, label, cx, y + h / 2 - 11, { align: 'center', color: textColor, font });
+      drawText(ctx, label, cx, y + h / 2 - 11, { align: 'center', color: textColor, font, shadow: true });
     }
     ctx.restore();
   }
@@ -181,6 +225,27 @@ export class Button {
   contains(px: number, py: number): boolean {
     return inRect(px, py, this.rect);
   }
+}
+
+/** 通貨表示などのピル型チップ。描画した幅を返す */
+export function drawChip(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  text: string,
+  color = '#ffffff',
+): void {
+  ctx.save();
+  roundRect(ctx, x, y, w, h, h / 2);
+  ctx.fillStyle = 'rgba(6,8,20,0.78)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  drawText(ctx, text, x + w / 2, y + h / 2 - 9, { align: 'center', color, font: FONT_SMALL });
+  ctx.restore();
 }
 
 /** 画面左上に置く「◀ もどる」ボタン */

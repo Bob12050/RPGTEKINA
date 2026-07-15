@@ -6,6 +6,7 @@ import type { Scene } from '../core/scene';
 import { getSpecies } from '../data/monsters';
 import { loadGame, hasSave } from '../game/save';
 import { newGame } from '../game/state';
+import { drawFancyBg } from '../ui/bg';
 import { drawMonster } from '../ui/sprites';
 import { Button, drawText, FONT_BIG, FONT_SMALL, view, isPortrait } from '../ui/window';
 import { HomeScene } from './home';
@@ -66,24 +67,18 @@ export class TitleScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    // 夜空風の背景
-    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
-    grad.addColorStop(0, '#0a0a2e');
-    grad.addColorStop(1, '#1a2a4a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, view.w, view.h);
+    drawFancyBg(ctx, 'title', this.time);
 
-    // 星
-    for (let i = 0; i < 40; i++) {
-      const x = (i * 137.5) % view.w;
-      const y = (i * 89.3) % (view.h * 0.6);
-      const tw = (Math.sin(this.time * 2 + i) + 1) / 2;
-      ctx.fillStyle = `rgba(255,255,255,${0.3 + tw * 0.5})`;
-      ctx.fillRect(x, y, 2, 2);
-    }
+    // ロゴの後光
+    const glow = ctx.createRadialGradient(view.w / 2, 130, 0, view.w / 2, 130, 220);
+    glow.addColorStop(0, 'rgba(255,217,74,0.22)');
+    glow.addColorStop(1, 'rgba(255,217,74,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(view.w / 2 - 240, 0, 480, 320);
 
-    drawText(ctx, 'RPGTEKINA', view.w / 2, 110, { font: FONT_BIG, align: 'center', color: '#ffd94a' });
-    drawText(ctx, '〜モンスターマスターへの みち〜', view.w / 2, 160, { align: 'center' });
+    const logoBounce = Math.sin(this.time * 1.6) * 3;
+    drawText(ctx, 'RPGTEKINA', view.w / 2, 104 + logoBounce, { font: FONT_BIG, align: 'center', color: '#ffd94a', shadow: true });
+    drawText(ctx, '〜モンスターマスターへの みち〜', view.w / 2, 158, { align: 'center', shadow: true });
 
     // マスコットたち(ゆらゆら)
     const bounce = Math.sin(this.time * 3) * 6;

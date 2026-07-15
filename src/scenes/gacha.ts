@@ -8,6 +8,7 @@ import { FARM_MAX, PARTY_MAX, rankStars, type Rank, type SpeciesDef } from '../c
 import { gachaLevel, MULTI_COST, MULTI_COUNT, pullOne, pullTen, RANK_RATES, SINGLE_COST } from '../data/gacha';
 import { createMonster } from '../game/monster';
 import { addMonster, markScouted } from '../game/state';
+import { drawFancyBg } from '../ui/bg';
 import { drawMonster } from '../ui/sprites';
 import { BackButton, Button, drawText, drawWindow, FONT_BIG, FONT_SMALL, isPortrait, view } from '../ui/window';
 
@@ -131,13 +132,7 @@ export class GachaScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    // きらびやかな夜空グラデ
-    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
-    grad.addColorStop(0, '#160a2e');
-    grad.addColorStop(1, '#2e1a4a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, view.w, view.h);
-    this.drawSparkles(ctx);
+    drawFancyBg(ctx, 'gacha', this.time);
 
     const state = requireState(this.app);
     const p = isPortrait();
@@ -158,11 +153,13 @@ export class GachaScene implements Scene {
         selected: this.cursor === 0,
         disabled: state.orbs < SINGLE_COST,
       });
+      const pulse = 0.45 + 0.3 * Math.sin(this.time * 3);
       this.multiButton.draw(ctx, bx, 180, bw, 100, '✨ 10れん ガチャ ✨', {
         color: '#7a3ad6',
         sub: `オーブ ${MULTI_COST} ・ ★4いじょう 1たい かくてい!`,
         selected: this.cursor === 1,
         disabled: state.orbs < MULTI_COST,
+        glow: `rgba(220,130,255,${pulse.toFixed(2)})`,
       });
 
       // 排出率の案内
@@ -201,19 +198,6 @@ export class GachaScene implements Scene {
     else this.drawMulti(ctx);
   }
 
-  /** 背景のキラキラ */
-  private drawSparkles(ctx: CanvasRenderingContext2D): void {
-    ctx.save();
-    for (let i = 0; i < 40; i++) {
-      const x = (i * 137.5) % view.w;
-      const y = (i * 251.3) % view.h;
-      const tw = 0.4 + 0.6 * Math.abs(Math.sin(this.time * 1.5 + i));
-      ctx.fillStyle = `rgba(255, 240, 200, ${tw * 0.5})`;
-      ctx.fillRect(x, y, 2, 2);
-    }
-    ctx.restore();
-  }
-
   private drawSingle(ctx: CanvasRenderingContext2D): void {
     const r = this.results[0];
     if (!r) return;
@@ -239,7 +223,23 @@ export class GachaScene implements Scene {
     const scale = p ? 7 : 8;
     const size = 16 * scale;
     const bounce = Math.sin(this.time * 3) * 5;
-    // 高レアは背後に光輪
+    // 高レアは背後に回転する光線
+    if (rankStars(sp.rank) >= 6) {
+      ctx.save();
+      ctx.translate(cx, cy + size / 2 - 10);
+      ctx.rotate(this.time * 0.5);
+      for (let i = 0; i < 10; i++) {
+        ctx.rotate((Math.PI * 2) / 10);
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,220,120,0.12)' : 'rgba(255,160,220,0.10)';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-34, -340);
+        ctx.lineTo(34, -340);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
     if (rankStars(sp.rank) >= 5) {
       ctx.save();
       ctx.fillStyle = `rgba(255, 217, 74, ${0.25 + 0.15 * Math.sin(this.time * 4)})`;

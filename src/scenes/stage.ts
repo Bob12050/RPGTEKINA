@@ -12,7 +12,8 @@ import { getStage, repeatGold } from '../data/stages';
 import type { BattleResult, EnemySpec } from '../game/battle';
 import { createMonster, maxStats } from '../game/monster';
 import { addItem, addMonster, healParty, markScouted, markStageCleared } from '../game/state';
-import { Button, drawGauge, drawText, drawWindow, FONT_SMALL, hpColor, isPortrait, MessageBox, view } from '../ui/window';
+import { drawFancyBg } from '../ui/bg';
+import { Button, drawGauge, drawText, drawWindow, FONT_BIG, FONT_SMALL, hpColor, isPortrait, MessageBox, view } from '../ui/window';
 import { BattleScene } from './battle';
 
 type Phase = 'intro' | 'clear' | 'failed';
@@ -142,11 +143,7 @@ export class StageScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
-    grad.addColorStop(0, '#0a1020');
-    grad.addColorStop(1, '#182438');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, view.w, view.h);
+    drawFancyBg(ctx, 'stage', this.time);
 
     const stage = getStage(this.stageId);
     const p = isPortrait();
@@ -190,9 +187,14 @@ export class StageScene implements Scene {
     }
 
     if (this.phase === 'clear') {
-      drawText(ctx, '★ STAGE CLEAR ★', cx, p ? 120 : 160, { align: 'center', color: '#ffd94a' });
+      const beat = 1 + 0.03 * Math.sin(this.time * 5);
+      ctx.save();
+      ctx.translate(cx, p ? 130 : 170);
+      ctx.scale(beat, beat);
+      drawText(ctx, '★ CLEAR! ★', 0, -22, { align: 'center', color: '#ffd94a', font: FONT_BIG, shadow: true });
+      ctx.restore();
     } else {
-      drawText(ctx, 'ぜんめつ…', cx, p ? 120 : 160, { align: 'center', color: '#f05a3d' });
+      drawText(ctx, 'ぜんめつ…', cx, p ? 120 : 160, { align: 'center', color: '#f05a3d', shadow: true });
     }
     const m = p ? 12 : 80;
     this.messages.draw(ctx, m, view.h - 200, view.w - m * 2, 150);

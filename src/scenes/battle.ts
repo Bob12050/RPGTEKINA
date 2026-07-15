@@ -17,6 +17,7 @@ import {
 } from '../game/battle';
 import { gainExp } from '../game/monster';
 import { consumeItem, markSeen } from '../game/state';
+import { drawFancyBg } from '../ui/bg';
 import { drawMonster } from '../ui/sprites';
 import {
   Button,
@@ -94,6 +95,8 @@ export class BattleScene implements Scene {
   private result: BattleResult | null = null;
   private postDone = false;
   private shake: { unitId: string; t: number } | null = null;
+  /** ダメージ/回復の数字ポップ */
+  private floaters: { text: string; color: string; x: number; y: number; t: number }[] = [];
   private time = 0;
 
   constructor(
@@ -127,6 +130,8 @@ export class BattleScene implements Scene {
       this.shake.t -= dt;
       if (this.shake.t <= 0) this.shake = null;
     }
+    for (const f of this.floaters) f.t += dt;
+    this.floaters = this.floaters.filter((f) => f.t < 0.9);
     const tap = this.app.input.takeTap();
     const key = this.app.input.poll();
 
@@ -408,6 +413,40 @@ export class BattleScene implements Scene {
     }));
   }
 
+  /** ダメージ/回復の数字ポップを出す */
+  private spawnFloater(unitId: string, delta: number): void {
+    if (delta === 0) return;
+    const unit = this.battle.findUnit(unitId);
+    if (!unit) return;
+    let x = view.w / 2;
+    let y = view.h / 2;
+    if (unit.side === 'enemy') {
+      const scale = this.battle.isBossWave() ? 9 : 6;
+      const pos = this.enemyPositions().find((p) => p.unit.id === unitId);
+      if (pos) {
+        x = pos.x + (16 * scale) / 2;
+        y = pos.y + 24;
+      } else {
+        y = (isPortrait() ? 390 : 330) - 90; // 倒れた直後などはだいたいの位置
+      }
+    } else {
+      const idx = this.battle.allies.findIndex((a) => a.id === unitId);
+      if (idx >= 0) {
+        const r = this.allyPanelRect(idx);
+        x = r.x + r.w / 2;
+        y = r.y - 4;
+      }
+    }
+    const heal = delta > 0;
+    this.floaters.push({
+      text: heal ? `+${delta}` : `${delta}`,
+      color: heal ? '#7dff9c' : unit.side === 'enemy' ? '#ffd94a' : '#ff7a5a',
+      x: x + (this.floaters.length % 3) * 10 - 10, // 連続ヒットで少しずらす
+      y,
+      t: 0,
+    });
+  }
+
   /** コマンド入力対象の味方(生存中) */
   private commandableAllies(): BattleUnit[] {
     return this.battle.aliveAllies();
@@ -482,6 +521,8 @@ export class BattleScene implements Scene {
           this.shake = { unitId: ev.unitId, t: 0.25 };
           break;
         case 'hpChange':
+          this.spawnFloater(ev.unitId, ev.delta);
+          break;
         case 'mpChange':
         case 'ko':
         case 'newWave':
@@ -553,16 +594,7 @@ export class BattleScene implements Scene {
 
   draw(ctx: CanvasRenderingContext2D): void {
     // 背景(ボスWAVEでは赤黒く染まる)
-    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
-    if (this.battle.isBossWave()) {
-      grad.addColorStop(0, '#1a0a14');
-      grad.addColorStop(1, '#3d1424');
-    } else {
-      grad.addColorStop(0, '#101828');
-      grad.addColorStop(1, '#24344d');
-    }
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, view.w, view.h);
+    drawFancyBg(ctx, this.battle.isBossWave() ? 'battleBoss' : 'battle', this.time);
     // 地面
     const groundY = isPortrait() ? 390 : 330;
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
@@ -582,6 +614,7 @@ export class BattleScene implements Scene {
 
     this.drawEnemies(ctx);
     this.drawAllyPanels(ctx);
+    this.drawFloaters(ctx);
 
     // ---- 下部の操作エリア(大きなタップボタン) ----
     const p = isPortrait();
@@ -698,54 +731,77 @@ export class BattleScene implements Scene {
     }
   }
 
-  private drawAllyPanels(ctx: CanvasRenderingContext2D): void {
+  /** 味方パネルの位置(描画とダメージポップのアンカーで共用) */
+  private allyPanelRect(i: number): Rect {
     const n = this.battle.allies.length;
     const msg = msgRect();
-    const current = this.phase === 'allyAction' || this.phase === 'skillPick' ? this.currentAlly() : undefined;
-
     if (isPortrait()) {
-      // 縦持ち: 2列グリッドで積む(4体でも収まる)
       const cols = n <= 2 ? 1 : 2;
       const rows = Math.ceil(n / cols);
       const gapX = 8;
       const w = cols === 1 ? view.w - 16 : Math.floor((view.w - 16 - gapX) / 2);
       const h = 62;
       const top = msg.y - rows * (h + 6);
-      for (let i = 0; i < n; i++) {
-        const unit = this.battle.allies[i]!;
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = 8 + col * (w + gapX);
-        const y = top + row * (h + 6);
-        drawWindow(ctx, x, y, w, h);
-        const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
+      return { x: 8 + (i % cols) * (w + gapX), y: top + Math.floor(i / cols) * (h + 6), w, h };
+    }
+    const gap = 12;
+    const w = Math.floor((view.w - 24 - gap * (n - 1)) / Math.max(1, n));
+    const h = 92;
+    return { x: 12 + i * (w + gap), y: msg.y - h - 6, w, h };
+  }
+
+  private drawAllyPanels(ctx: CanvasRenderingContext2D): void {
+    const n = this.battle.allies.length;
+    const current = this.phase === 'allyAction' || this.phase === 'skillPick' ? this.currentAlly() : undefined;
+    const p = isPortrait();
+
+    for (let i = 0; i < n; i++) {
+      const unit = this.battle.allies[i]!;
+      const { x, y, w, h } = this.allyPanelRect(i);
+      drawWindow(ctx, x, y, w, h);
+      // 行動中の味方は金色にハイライト
+      if (current && current.id === unit.id) {
+        ctx.save();
+        ctx.strokeStyle = '#ffd94a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, 13);
+        ctx.stroke();
+        ctx.restore();
+        drawText(ctx, '▶', x + 2, y + 4, { color: '#ffd94a' });
+      }
+      const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
+      if (p) {
         drawText(ctx, unit.name, x + 12, y + 6, { color: nameColor, font: FONT_SMALL });
         drawText(ctx, `Lv${unit.level}`, x + w - 10, y + 6, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
         drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 12, y + 28, { font: FONT_SMALL });
         drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 10, y + 28, { align: 'right', font: FONT_SMALL, color: '#8fb8f0' });
-        drawGauge(ctx, x + 12, y + 48, w - 24, 7, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
-        if (current && current.id === unit.id) drawText(ctx, '▶', x, y + 4, { color: '#ffd94a' });
+        drawGauge(ctx, x + 12, y + 48, w - 24, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
+      } else {
+        drawText(ctx, `${unit.name}`, x + 14, y + 10, { color: nameColor, font: FONT_SMALL });
+        drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 10, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
+        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 14, y + 34, { font: FONT_SMALL });
+        drawGauge(ctx, x + 14, y + 56, w - 28, 9, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
+        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 14, y + 34, { align: 'right', font: FONT_SMALL, color: '#8fb8f0' });
+        drawGauge(ctx, x + 14, y + 70, w - 28, 7, unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp, '#4a8ae8');
       }
-      return;
     }
+  }
 
-    // 横持ち: 人数ぶん横に並べる(4体まで)
-    const gap = 12;
-    const w = Math.floor((view.w - 24 - gap * (n - 1)) / Math.max(1, n));
-    const h = 92;
-    const y = msg.y - h - 6;
-    for (let i = 0; i < n; i++) {
-      const unit = this.battle.allies[i]!;
-      const x = 12 + i * (w + gap);
-      drawWindow(ctx, x, y, w, h);
-      const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
-      drawText(ctx, `${unit.name}`, x + 14, y + 10, { color: nameColor, font: FONT_SMALL });
-      drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 10, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
-      drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 14, y + 34, { font: FONT_SMALL });
-      drawGauge(ctx, x + 14, y + 56, w - 28, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
-      drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 14, y + 34, { align: 'right', font: FONT_SMALL, color: '#8fb8f0' });
-      drawGauge(ctx, x + 14, y + 70, w - 28, 6, unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp, '#4a8ae8');
-      if (current && current.id === unit.id) drawText(ctx, '▶', x + 1, y + 8, { color: '#ffd94a' });
+  /** ダメージ/回復ポップの描画(上にふわっと消える) */
+  private drawFloaters(ctx: CanvasRenderingContext2D): void {
+    for (const f of this.floaters) {
+      const alpha = Math.max(0, 1 - f.t / 0.9);
+      const pop = f.t < 0.12 ? 1 + (0.12 - f.t) * 3 : 1; // 出た瞬間だけ少し大きく
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      drawText(ctx, f.text, f.x, f.y - f.t * 46, {
+        align: 'center',
+        color: f.color,
+        font: `bold ${Math.round(26 * pop)}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+        shadow: true,
+      });
+      ctx.restore();
     }
   }
 }

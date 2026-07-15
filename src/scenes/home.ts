@@ -14,12 +14,13 @@ import { maxStats } from '../game/monster';
 import { saveGame } from '../game/save';
 import { consumeItem, healParty } from '../game/state';
 import { monsterLabel, monsterNote } from '../ui/format';
+import { drawFancyBg } from '../ui/bg';
 import { drawMonster } from '../ui/sprites';
 import {
   Button,
+  drawChip,
   drawGauge,
   drawText,
-  drawWindow,
   FONT_SMALL,
   hpColor,
   inRect,
@@ -39,8 +40,8 @@ import { StatusScene } from './status';
 
 type Phase = 'main' | 'party' | 'itemPick' | 'itemTarget' | 'message';
 
+/** ヒーローボタン(クエスト)以外の 8 機能タイル */
 const TILES = [
-  { icon: '⚔️', label: 'クエスト', color: '#a8402e' },
   { icon: '🎰', label: 'ガチャ', color: '#7a3ad6' },
   { icon: '💪', label: 'つよさ', color: '#2c6a4f' },
   { icon: '🎒', label: 'どうぐ', color: '#7a5a26' },
@@ -51,11 +52,14 @@ const TILES = [
   { icon: '💾', label: 'セーブ', color: '#555568' },
 ] as const;
 
-const GRID_COLS = 3;
+const GRID_COLS = 4;
+/** カーソル: 0=クエスト(ヒーロー) / 1〜8=タイル */
+const CURSOR_MAX = TILES.length + 1;
 
 export class HomeScene implements Scene {
   private phase: Phase = 'main';
-  private cursor = 0; // グリッドのキーボードカーソル
+  private cursor = 0; // 0=クエスト(ヒーロー) / 1〜8=タイル
+  private heroButton = new Button();
   private tiles = TILES.map(() => new Button());
   private partySlots: Rect[] = [];
   private partyMenu = new Menu([]);
@@ -92,21 +96,30 @@ export class HomeScene implements Scene {
               return;
             }
           }
+          if (this.heroButton.contains(tap.x, tap.y)) {
+            this.cursor = 0;
+            this.activateTile(0);
+            return;
+          }
           for (let i = 0; i < this.tiles.length; i++) {
             if (this.tiles[i]!.contains(tap.x, tap.y)) {
-              this.cursor = i;
-              this.activateTile(i);
+              this.cursor = i + 1;
+              this.activateTile(i + 1);
               return;
             }
           }
           return;
         }
         if (!key) return;
-        if (key === 'left') this.cursor = (this.cursor + TILES.length - 1) % TILES.length;
-        else if (key === 'right') this.cursor = (this.cursor + 1) % TILES.length;
-        else if (key === 'up') this.cursor = (this.cursor + TILES.length - GRID_COLS) % TILES.length;
-        else if (key === 'down') this.cursor = (this.cursor + GRID_COLS) % TILES.length;
-        else if (key === 'confirm') this.activateTile(this.cursor);
+        if (key === 'left') this.cursor = (this.cursor + CURSOR_MAX - 1) % CURSOR_MAX;
+        else if (key === 'right') this.cursor = (this.cursor + 1) % CURSOR_MAX;
+        else if (key === 'down') {
+          if (this.cursor === 0) this.cursor = 1;
+          else this.cursor = this.cursor + GRID_COLS <= TILES.length ? this.cursor + GRID_COLS : 0;
+        } else if (key === 'up') {
+          if (this.cursor === 0) this.cursor = TILES.length - GRID_COLS + 1;
+          else this.cursor = this.cursor - GRID_COLS >= 1 ? this.cursor - GRID_COLS : 0;
+        } else if (key === 'confirm') this.activateTile(this.cursor);
         break;
       }
       case 'party': {
@@ -170,6 +183,7 @@ export class HomeScene implements Scene {
     return this.overlayRect !== null && !inRect(px, py, this.overlayRect);
   }
 
+  /** i: 0=クエスト(ヒーロー) / 1〜8=TILES順 */
   private activateTile(i: number): void {
     const state = requireState(this.app);
     switch (i) {
@@ -309,28 +323,25 @@ export class HomeScene implements Scene {
   // ==================== 描画 ====================
 
   draw(ctx: CanvasRenderingContext2D): void {
-    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
-    grad.addColorStop(0, '#101a2e');
-    grad.addColorStop(1, '#24304a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, view.w, view.h);
+    drawFancyBg(ctx, 'home', this.time);
     const state = requireState(this.app);
     const p = isPortrait();
 
-    // ---- 上部バー: タイトル + 通貨 ----
-    drawWindow(ctx, 10, 10, view.w - 20, 52);
-    drawText(ctx, 'きょてん', 30, 24, { color: '#ffd94a', font: FONT_SMALL });
-    drawText(ctx, `💎 ${state.orbs}`, view.w - (p ? 150 : 200), 24, { align: 'right', color: '#8fd4ff', font: FONT_SMALL });
-    drawText(ctx, `🪙 ${state.gold} G`, view.w - 28, 24, { align: 'right', color: '#ffd94a', font: FONT_SMALL });
+    // ---- 上部バー: タイトル + 通貨チップ ----
+    drawText(ctx, 'きょてん', 20, 18, { color: '#ffd94a', shadow: true });
+    drawChip(ctx, view.w - 20 - 122, 14, 122, 34, `🪙 ${state.gold} G`, '#ffd94a');
+    drawChip(ctx, view.w - 20 - 122 - 118, 14, 110, 34, `💎 ${state.orbs}`, '#8fd4ff');
 
     if (p) {
-      this.drawMascot(ctx, view.w / 2 - 72, 96, 9);
-      this.drawPartyRow(ctx, 12, 356, view.w - 24);
-      this.drawGrid(ctx, 14, view.h - 3 * 94 - 2 * 10 - 14, view.w - 28, 94);
+      this.drawMascot(ctx, view.w / 2 - 64, 76, 8);
+      this.drawPartyRow(ctx, 12, 280, view.w - 24);
+      this.drawHero(ctx, 14, 440, view.w - 28, 102);
+      this.drawGrid(ctx, 14, 556, view.w - 28, 110);
     } else {
-      this.drawMascot(ctx, 170, 150, 10);
-      this.drawPartyRow(ctx, 24, 460, 560);
-      this.drawGrid(ctx, 620, 90, view.w - 620 - 16, 92);
+      this.drawMascot(ctx, 150, 160, 10);
+      this.drawPartyRow(ctx, 24, 470, 520);
+      this.drawHero(ctx, 580, 84, view.w - 580 - 16, 96);
+      this.drawGrid(ctx, 580, 194, view.w - 580 - 16, 82);
     }
 
     // ---- オーバーレイ(モーダル風) ----
@@ -415,10 +426,22 @@ export class HomeScene implements Scene {
     }
   }
 
-  /** 3x3 のアイコンボタングリッド */
+  /** メインの大型クエストボタン */
+  private drawHero(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+    const pulse = 0.45 + 0.25 * Math.sin(this.time * 3);
+    this.heroButton.draw(ctx, x, y, w, h, '⚔️ クエストへ しゅっぱつ!', {
+      color: '#c2452e',
+      sub: 'エリアを えらんで バトル!',
+      selected: this.phase === 'main' && this.cursor === 0,
+      glow: `rgba(255,150,70,${pulse.toFixed(2)})`,
+    });
+  }
+
+  /** 4x2 のアイコンボタングリッド */
   private drawGrid(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, tileH: number): void {
     const gap = 10;
     const tileW = Math.floor((w - gap * (GRID_COLS - 1)) / GRID_COLS);
+    const labelFont = tileW < 100 ? '13px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif' : undefined;
     for (let i = 0; i < TILES.length; i++) {
       const t = TILES[i]!;
       const col = i % GRID_COLS;
@@ -428,7 +451,8 @@ export class HomeScene implements Scene {
       this.tiles[i]!.draw(ctx, bx, by, tileW, tileH, t.label, {
         icon: t.icon,
         color: t.color,
-        selected: this.phase === 'main' && i === this.cursor,
+        font: labelFont,
+        selected: this.phase === 'main' && i + 1 === this.cursor,
       });
     }
   }

@@ -13,6 +13,7 @@ import {
   type AreaDef,
 } from '../data/stages';
 import { getSpecies } from '../data/monsters';
+import { drawFancyBg } from '../ui/bg';
 import { drawGridSprite, drawMonster, FAMILY_SPRITES } from '../ui/sprites';
 import { BackButton, drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
 import { StageScene } from './stage';
@@ -156,11 +157,7 @@ export class StageSelectScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
-    grad.addColorStop(0, '#0a1428');
-    grad.addColorStop(1, '#16304a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, view.w, view.h);
+    drawFancyBg(ctx, 'map', this.time);
     const p = isPortrait();
     const state = requireState(this.app);
 
