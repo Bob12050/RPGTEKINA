@@ -34,8 +34,8 @@ import { getSpecies } from '../data/monsters';
 import { MonsterBoxScene } from './box';
 import { DexScene } from './dex';
 import { GachaScene } from './gacha';
+import { QuestHubScene } from './questHub';
 import { ShopScene } from './shop';
-import { StageSelectScene } from './stageSelect';
 import { StatusScene } from './status';
 
 type Phase = 'main' | 'itemPick' | 'itemTarget' | 'message';
@@ -159,7 +159,7 @@ export class HomeScene implements Scene {
     const state = requireState(this.app);
     switch (i) {
       case 0:
-        this.app.scenes.push(new StageSelectScene(this.app));
+        this.app.scenes.push(new QuestHubScene(this.app));
         break;
       case 1:
         this.app.scenes.push(new GachaScene(this.app));

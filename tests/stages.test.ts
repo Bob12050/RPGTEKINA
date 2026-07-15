@@ -5,15 +5,18 @@ import { getItem } from '../src/data/items';
 import {
   AREAS,
   areaProgress,
+  EVENT_STAGES,
   FIRST_STAGE,
   getArea,
   getStage,
   hasStage,
   isAreaUnlocked,
+  isExtraStageUnlocked,
   isStageUnlocked,
   questsOf,
   repeatGold,
   STAGES,
+  TRAINING_STAGES,
 } from '../src/data/stages';
 
 describe('エリア/クエストデータ', () => {
@@ -167,6 +170,46 @@ describe('エリア/クエストデータ', () => {
   it('エリアの代表モンスターが実在する', () => {
     for (const a of AREAS) {
       expect(hasSpecies(a.iconSpecies), a.id).toBe(true);
+    }
+  });
+});
+
+describe('育成/イベントクエスト', () => {
+  const EXTRAS = [...TRAINING_STAGES, ...EVENT_STAGES];
+
+  it('IDが重複せず、getStage/hasStage で引ける', () => {
+    const ids = EXTRAS.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const s of EXTRAS) {
+      expect(hasStage(s.id), s.id).toBe(true);
+      expect(getStage(s.id).id).toBe(s.id);
+    }
+  });
+
+  it('敵・報酬・ドロップ・モンスタードロップが正しい', () => {
+    for (const s of EXTRAS) {
+      expect(s.enemies.length, s.id).toBeGreaterThan(0);
+      for (const e of s.enemies) {
+        expect(hasSpecies(e.speciesId), `${s.id} の ${e.speciesId}`).toBe(true);
+        expect(e.level).toBeGreaterThanOrEqual(1);
+        expect(e.level).toBeLessThanOrEqual(50);
+      }
+      expect(s.rewardGold).toBeGreaterThan(0);
+      for (const r of s.rewardItems) expect(() => getItem(r.itemId), `${s.id} の ${r.itemId}`).not.toThrow();
+      for (const d of s.drops ?? []) expect(() => getItem(d.itemId), `${s.id} の ${d.itemId}`).not.toThrow();
+      for (const md of s.monsterDrops ?? []) expect(hasSpecies(md.speciesId), `${s.id} の ${md.speciesId}`).toBe(true);
+    }
+  });
+
+  it('解放条件は実在するステージIDで、未クリアなら封鎖される', () => {
+    for (const s of EXTRAS) {
+      if (s.requires === undefined) {
+        expect(isExtraStageUnlocked(s, []), `${s.id} は無条件`).toBe(true);
+        continue;
+      }
+      expect(hasStage(s.requires), `${s.id} の requires ${s.requires}`).toBe(true);
+      expect(isExtraStageUnlocked(s, []), `${s.id} は未クリアで封鎖`).toBe(false);
+      expect(isExtraStageUnlocked(s, [s.requires]), `${s.id} は条件クリアで解放`).toBe(true);
     }
   });
 });

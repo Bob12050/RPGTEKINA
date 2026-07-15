@@ -59,6 +59,10 @@ export interface StageDef {
   drops?: ItemDrop[];
   /** モンスタードロップ(毎回それぞれ抽選・省略可)。ガチャに出ないF種はここで配る */
   monsterDrops?: MonsterDrop[];
+  /** 解放条件(育成/イベント用): このステージIDをクリアで解放。省略時は最初から挑戦可 */
+  requires?: string;
+  /** 一覧に出す短い説明(育成/イベント用) */
+  desc?: string;
 }
 
 /** 2回目以降のクリアでもらえる周回ゴールドの倍率 */
@@ -212,8 +216,64 @@ export const STAGES: StageDef[] = [
   }),
 ];
 
-const stageMap = new Map(STAGES.map((s) => [s.id, s]));
+// ============================================================
+// 育成クエスト(経験値・ゴールドかせぎ用の特別クエスト)
+//   ストーリーの進行で解放される。メタル系がどっさり経験値をくれる。
+// ============================================================
+export const TRAINING_STAGES: StageDef[] = [
+  q({
+    id: 'train-1', areaId: 'training', name: 'メタルの すあな', recLevel: 8, requires: 'plains-3',
+    desc: 'メタぷにが たくさんの けいけんちを くれる。まもりが かたいので こうげき力が だいじ!',
+    enemies: [{ speciesId: 'metapuni', level: 8 }, { speciesId: 'puni', level: 5 }],
+    rewardGold: 100, rewardOrbs: 5, rewardItems: [{ itemId: 'goodherb', count: 1 }],
+    drops: [{ itemId: 'goodherb', chance: 0.2, count: 1 }],
+  }),
+  q({
+    id: 'train-2', areaId: 'training', name: 'はぐれメタルの すあな', recLevel: 22, requires: 'cave-3',
+    desc: 'メタぷに 2たいの ぐんれい。たおせば レベルが ぐんぐん あがる!',
+    enemies: [{ speciesId: 'metapuni', level: 22 }, { speciesId: 'metapuni', level: 22 }],
+    rewardGold: 300, rewardOrbs: 8, rewardItems: [{ itemId: 'magicwater', count: 2 }],
+    drops: [{ itemId: 'magicwater', chance: 0.25, count: 1 }],
+  }),
+  q({
+    id: 'train-3', areaId: 'training', name: 'メタルキングの すあな', recLevel: 36, requires: 'lair-2',
+    desc: 'メタルキングは ばくだいな けいけんちの かたまり! そうびを ととのえて いどもう。',
+    enemies: [{ speciesId: 'metalking', level: 36 }, { speciesId: 'metapuni', level: 30 }],
+    rewardGold: 800, rewardOrbs: 10, rewardItems: [{ itemId: 'lifeleaf', count: 1 }],
+    drops: [{ itemId: 'goodherb', chance: 0.3, count: 2 }],
+  }),
+];
+
+// ============================================================
+// イベントクエスト(特別なボス・レア報酬)
+//   高レアモンスターが ドロップしたり オーブが たくさん もらえる。
+// ============================================================
+export const EVENT_STAGES: StageDef[] = [
+  q({
+    id: 'event-1', areaId: 'event', name: '天空の れいじゅう', recLevel: 15, requires: 'forest-3', boss: true,
+    desc: 'そらの おうじゃ グリフォンが あらわれた! たおすと なかまに なる かも!?',
+    enemies: [{ speciesId: 'griffin', level: 16 }, { speciesId: 'wyvern', level: 14 }],
+    rewardGold: 400, rewardOrbs: 25, rewardItems: [{ itemId: 'lifeleaf', count: 1 }, { itemId: 'magicwater', count: 2 }],
+    drops: [{ itemId: 'lifeleaf', chance: 0.12, count: 1 }],
+    monsterDrops: [{ speciesId: 'griffin', level: 15, chance: 0.1 }],
+  }),
+  q({
+    id: 'event-2', areaId: 'event', name: 'どくりゅうの まつり', recLevel: 28, requires: 'volcano-3', boss: true,
+    desc: 'きゅうつの くびを もつ ヒュドラ との けっせん! レアな なかまを ねらえ。',
+    enemies: [{ speciesId: 'hydra', level: 30 }, { speciesId: 'flamedrake', level: 26 }],
+    rewardGold: 800, rewardOrbs: 30, rewardItems: [{ itemId: 'lifeleaf', count: 2 }, { itemId: 'magicwater', count: 3 }],
+    drops: [{ itemId: 'lifeleaf', chance: 0.15, count: 1 }],
+    monsterDrops: [{ speciesId: 'hydra', level: 28, chance: 0.08 }],
+  }),
+];
+
+const stageMap = new Map([...STAGES, ...TRAINING_STAGES, ...EVENT_STAGES].map((s) => [s.id, s]));
 const areaMap = new Map(AREAS.map((a) => [a.id, a]));
+
+/** 育成/イベントなど「解放条件つき単体クエスト」の解放判定 */
+export function isExtraStageUnlocked(stage: StageDef, cleared: readonly string[]): boolean {
+  return stage.requires === undefined || cleared.includes(stage.requires);
+}
 
 export function getStage(id: string): StageDef {
   const s = stageMap.get(id);
