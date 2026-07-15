@@ -34,13 +34,8 @@
         align-items: center;
         justify-content: center;
         height: 100%;
-      }
-      /* 縦持ちのスマホでは画面上部に寄せて、下半分をタッチ操作用に空ける */
-      @media (orientation: portrait) and (pointer: coarse) {
-        #game-root {
-          align-items: flex-start;
-          padding-top: env(safe-area-inset-top, 0);
-        }
+        padding-top: env(safe-area-inset-top, 0);
+        box-sizing: border-box;
       }
       canvas {
         image-rendering: pixelated;
@@ -51,7 +46,7 @@
         touch-action: none;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-CnK6YHsv.js"></script>
+    <script type="module" crossorigin src="./assets/index-ClxMrPeN.js"></script>
   </head>
   <body>
     <div id="game-root"></div>
