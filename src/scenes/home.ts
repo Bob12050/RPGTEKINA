@@ -2,7 +2,7 @@
 // ホーム(きょてん)シーン — ソシャゲ風レイアウト
 //   上: 通貨バー(オーブ/ゴールド)
 //   中: マスコット + パーティ4枠(タップでステータス)
-//   下: アイコンつき大ボタンの 3x3 グリッド
+//   下: アイコンつき大ボタンの 4x2 グリッド(先頭がクエスト)
 //   すべてタップで操作できる(キーボードも併用可)。
 // ============================================================
 import { requireState, type App } from '../core/app';
@@ -40,8 +40,9 @@ import { StatusScene } from './status';
 
 type Phase = 'main' | 'itemPick' | 'itemTarget' | 'message';
 
-/** ヒーローボタン(クエスト)以外の 7 機能タイル */
+/** ホームの機能タイル(4x2) */
 const TILES = [
+  { icon: '⚔️', label: 'クエスト', color: '#c2452e' },
   { icon: '🎰', label: 'ガチャ', color: '#7a3ad6' },
   { icon: '📦', label: 'モンスター', color: '#2c6a4f' },
   { icon: '🎒', label: 'どうぐ', color: '#7a5a26' },
@@ -52,13 +53,10 @@ const TILES = [
 ] as const;
 
 const GRID_COLS = 4;
-/** カーソル: 0=クエスト(ヒーロー) / 1〜8=タイル */
-const CURSOR_MAX = TILES.length + 1;
 
 export class HomeScene implements Scene {
   private phase: Phase = 'main';
-  private cursor = 0; // 0=クエスト(ヒーロー) / 1〜8=タイル
-  private heroButton = new Button();
+  private cursor = 0; // タイルのキーボードカーソル
   private tiles = TILES.map(() => new Button());
   private partySlots: Rect[] = [];
   private itemMenu = new Menu([]);
@@ -94,30 +92,21 @@ export class HomeScene implements Scene {
               return;
             }
           }
-          if (this.heroButton.contains(tap.x, tap.y)) {
-            this.cursor = 0;
-            this.activateTile(0);
-            return;
-          }
           for (let i = 0; i < this.tiles.length; i++) {
             if (this.tiles[i]!.contains(tap.x, tap.y)) {
-              this.cursor = i + 1;
-              this.activateTile(i + 1);
+              this.cursor = i;
+              this.activateTile(i);
               return;
             }
           }
           return;
         }
         if (!key) return;
-        if (key === 'left') this.cursor = (this.cursor + CURSOR_MAX - 1) % CURSOR_MAX;
-        else if (key === 'right') this.cursor = (this.cursor + 1) % CURSOR_MAX;
-        else if (key === 'down') {
-          if (this.cursor === 0) this.cursor = 1;
-          else this.cursor = this.cursor + GRID_COLS <= TILES.length ? this.cursor + GRID_COLS : 0;
-        } else if (key === 'up') {
-          if (this.cursor === 0) this.cursor = TILES.length - GRID_COLS + 1;
-          else this.cursor = this.cursor - GRID_COLS >= 1 ? this.cursor - GRID_COLS : 0;
-        } else if (key === 'confirm') this.activateTile(this.cursor);
+        if (key === 'left') this.cursor = (this.cursor + TILES.length - 1) % TILES.length;
+        else if (key === 'right') this.cursor = (this.cursor + 1) % TILES.length;
+        else if (key === 'down') this.cursor = (this.cursor + GRID_COLS) % TILES.length;
+        else if (key === 'up') this.cursor = (this.cursor + TILES.length - GRID_COLS) % TILES.length;
+        else if (key === 'confirm') this.activateTile(this.cursor);
         break;
       }
       case 'itemPick': {
@@ -165,7 +154,7 @@ export class HomeScene implements Scene {
     return this.overlayRect !== null && !inRect(px, py, this.overlayRect);
   }
 
-  /** i: 0=クエスト(ヒーロー) / 1〜7=TILES順 */
+  /** i: TILES の並び順(0=クエスト) */
   private activateTile(i: number): void {
     const state = requireState(this.app);
     switch (i) {
@@ -299,15 +288,13 @@ export class HomeScene implements Scene {
     drawChip(ctx, view.w - 20 - 122 - 118, 14, 110, 34, `💎 ${state.orbs}`, '#8fd4ff');
 
     if (p) {
-      this.drawMascot(ctx, view.w / 2 - 64, 76, 8);
-      this.drawPartyRow(ctx, 12, 280, view.w - 24);
-      this.drawHero(ctx, 14, 440, view.w - 28, 102);
+      this.drawMascot(ctx, view.w / 2 - 72, 84, 9);
+      this.drawPartyRow(ctx, 12, 320, view.w - 24);
       this.drawGrid(ctx, 14, 556, view.w - 28, 110);
     } else {
       this.drawMascot(ctx, 150, 160, 10);
       this.drawPartyRow(ctx, 24, 470, 520);
-      this.drawHero(ctx, 580, 84, view.w - 580 - 16, 96);
-      this.drawGrid(ctx, 580, 194, view.w - 580 - 16, 82);
+      this.drawGrid(ctx, 580, 120, view.w - 580 - 16, 100);
     }
 
     // ---- オーバーレイ(モーダル風) ----
@@ -387,17 +374,6 @@ export class HomeScene implements Scene {
     }
   }
 
-  /** メインの大型クエストボタン */
-  private drawHero(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-    const pulse = 0.45 + 0.25 * Math.sin(this.time * 3);
-    this.heroButton.draw(ctx, x, y, w, h, '⚔️ クエストへ しゅっぱつ!', {
-      color: '#c2452e',
-      sub: 'エリアを えらんで バトル!',
-      selected: this.phase === 'main' && this.cursor === 0,
-      glow: `rgba(255,150,70,${pulse.toFixed(2)})`,
-    });
-  }
-
   /** 4x2 のアイコンボタングリッド */
   private drawGrid(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, tileH: number): void {
     const gap = 10;
@@ -413,7 +389,7 @@ export class HomeScene implements Scene {
         icon: t.icon,
         color: t.color,
         font: labelFont,
-        selected: this.phase === 'main' && i + 1 === this.cursor,
+        selected: this.phase === 'main' && i === this.cursor,
       });
     }
   }
