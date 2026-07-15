@@ -51,6 +51,7 @@ type Phase =
   | 'itemPick'
   | 'targetEnemy'
   | 'targetAlly'
+  | 'retireConfirm'
   | 'finished';
 
 type TargetContext =
@@ -66,7 +67,7 @@ function msgRect(): Rect {
 }
 
 /** コマンドボタンの配色 */
-const CMD_COLORS = ['#a8402e', '#2c6a4f', '#2c4a80'] as const; // たたかう/どうぐ/にげる
+const CMD_COLORS = ['#a8402e', '#2c6a4f', '#555568'] as const; // たたかう/どうぐ/リタイア
 const ACT_COLORS = ['#a8402e', '#7a3ad6', '#2c4a80'] as const; // こうげき/とくぎ/ぼうぎょ
 
 export class BattleScene implements Scene {
@@ -75,8 +76,10 @@ export class BattleScene implements Scene {
   private phase: Phase = 'playback';
   private cmdCursor = 0;
   private actCursor = 0;
-  private cmdButtons = [new Button(), new Button(), new Button()]; // たたかう/どうぐ/にげる
+  private retireCursor = 0; // 0=やめとく 1=リタイアする
+  private cmdButtons = [new Button(), new Button(), new Button()]; // たたかう/どうぐ/リタイア
   private actButtons = [new Button(), new Button(), new Button()]; // こうげき/とくぎ/ぼうぎょ
+  private retireButtons = [new Button(), new Button()]; // やめとく/リタイアする
   private backButton = new Button();
   private skillMenu = new Menu([]);
   private itemMenu = new Menu([]);
@@ -266,11 +269,32 @@ export class BattleScene implements Scene {
         else if (r === 'select') this.chooseAllyTarget(this.allyMenu.cursor);
         break;
       }
+      case 'retireConfirm': {
+        if (tap) {
+          if (this.retireButtons[0]!.contains(tap.x, tap.y)) this.phase = 'command';
+          else if (this.retireButtons[1]!.contains(tap.x, tap.y)) this.doRetire();
+          return;
+        }
+        if (!key) return;
+        if (key === 'left' || key === 'right' || key === 'up' || key === 'down') this.retireCursor = 1 - this.retireCursor;
+        else if (key === 'cancel') this.phase = 'command';
+        else if (key === 'confirm') {
+          if (this.retireCursor === 1) this.doRetire();
+          else this.phase = 'command';
+        }
+        break;
+      }
       case 'finished': {
         if (tap || key === 'confirm' || key === 'cancel') this.exitBattle();
         break;
       }
     }
+  }
+
+  /** リタイア実行: すぐにバトルを終了してクエストから撤退する */
+  private doRetire(): void {
+    this.eventQueue.push(...this.battle.retire());
+    this.phase = 'playback';
   }
 
   // ---- コマンド実行(タップ/キー共通) ----
@@ -286,8 +310,9 @@ export class BattleScene implements Scene {
         this.buildItemMenu();
         this.phase = 'itemPick';
         break;
-      case 2: // にげる
-        this.runTurn({ kind: 'flee' });
+      case 2: // リタイア(確認をはさむ)
+        this.retireCursor = 0;
+        this.phase = 'retireConfirm';
         break;
     }
   }
@@ -565,12 +590,32 @@ export class BattleScene implements Scene {
 
     if (this.phase === 'command') {
       const bw = Math.floor((area.w - gap * 2) / 3);
-      const labels = ['たたかう', 'どうぐ', 'にげる'];
+      const labels = ['たたかう', 'どうぐ', 'リタイア'];
       labels.forEach((label, i) => {
         this.cmdButtons[i]!.draw(ctx, area.x + i * (bw + gap), area.y, bw, area.h, label, {
           color: CMD_COLORS[i],
           selected: i === this.cmdCursor,
         });
+      });
+    }
+
+    if (this.phase === 'retireConfirm') {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, view.w, view.h);
+      const mw = Math.min(420, view.w - 24);
+      const mx = (view.w - mw) / 2;
+      const my = view.h / 2 - 130;
+      drawWindow(ctx, mx, my, mw, 210);
+      drawText(ctx, 'クエストを リタイアする?', mx + mw / 2, my + 26, { align: 'center', color: '#ffd94a' });
+      drawText(ctx, 'ほうしゅうは もらえないよ', mx + mw / 2, my + 62, { align: 'center', font: FONT_SMALL, color: '#ccccee' });
+      const bw = Math.floor((mw - 3 * 14) / 2);
+      this.retireButtons[0]!.draw(ctx, mx + 14, my + 110, bw, 72, 'やめとく', {
+        color: '#2c4a80',
+        selected: this.retireCursor === 0,
+      });
+      this.retireButtons[1]!.draw(ctx, mx + 14 + bw + 14, my + 110, bw, 72, 'リタイアする', {
+        color: '#a8402e',
+        selected: this.retireCursor === 1,
       });
     }
 

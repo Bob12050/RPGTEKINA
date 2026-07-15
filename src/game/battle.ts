@@ -34,8 +34,7 @@ export type AllyAction =
 
 export type PartyCommand =
   | { kind: 'fight'; actions: Map<string, AllyAction> }
-  | { kind: 'item'; itemId: string; targetAllyId?: string }
-  | { kind: 'flee' };
+  | { kind: 'item'; itemId: string; targetAllyId?: string };
 
 export type BattleEvent =
   | { type: 'message'; text: string }
@@ -46,7 +45,7 @@ export type BattleEvent =
   | { type: 'newWave'; waveIndex: number }
   | { type: 'end'; result: BattleResult };
 
-export type BattleResult = 'win' | 'lose' | 'flee';
+export type BattleResult = 'win' | 'lose' | 'retire';
 
 export interface BattleRewards {
   exp: number;
@@ -139,7 +138,6 @@ export class Battle {
   rewards: BattleRewards = { exp: 0, gold: 0 };
   /** 倒した種族(最終ボス撃破判定などに使う) */
   defeatedSpecies = new Set<string>();
-  private fleeAttempts = 0;
 
   constructor(party: MonsterInstance[], waves: EnemySpec[][], bossFinalWave = false) {
     if (waves.length === 0 || waves.every((w) => w.length === 0)) throw new Error('敵のいないバトル');
@@ -204,10 +202,6 @@ export class Battle {
         this.doItem(ev, command.itemId, command.targetAllyId);
         if (!this.result) this.enemiesAct(ev);
         break;
-      case 'flee':
-        this.doFlee(ev);
-        if (!this.result) this.enemiesAct(ev);
-        break;
       case 'fight':
         this.doFight(ev, command.actions);
         break;
@@ -258,23 +252,17 @@ export class Battle {
     }
   }
 
-  // ---- にげる ----
-  private doFlee(ev: BattleEvent[]): void {
-    ev.push({ type: 'message', text: 'みんなは にげだした!' });
-    if (this.isBossWave()) {
-      ev.push({ type: 'message', text: 'しかし まわりこまれてしまった!' });
-      return;
-    }
-    const allyAgi = this.aliveAllies().reduce((s, u) => s + effAgi(u), 0) / Math.max(1, this.aliveAllies().length);
-    const enemyAgi = this.aliveEnemies().reduce((s, u) => s + effAgi(u), 0) / Math.max(1, this.aliveEnemies().length);
-    const p = Math.max(0.3, Math.min(0.95, 0.55 + (allyAgi - enemyAgi) / 150 + this.fleeAttempts * 0.15));
-    this.fleeAttempts += 1;
-    if (chance(p)) {
-      this.result = 'flee';
-      ev.push({ type: 'end', result: 'flee' });
-    } else {
-      ev.push({ type: 'message', text: 'しかし まわりこまれてしまった!' });
-    }
+  /**
+   * クエストをリタイア(あきらめて撤退)する。
+   * ソシャゲ式: いつでも確実に成功し、敵のターンも回らない。報酬はなし。
+   */
+  retire(): BattleEvent[] {
+    if (this.result) return [];
+    this.result = 'retire';
+    return [
+      { type: 'message', text: 'クエストを リタイアした…。' },
+      { type: 'end', result: 'retire' },
+    ];
   }
 
   // ---- たたかう(全員の行動を速さ順に解決) ----
@@ -555,7 +543,6 @@ export class Battle {
   /** 次のWAVEを投入する(小休止つき・戦闘はシームレスに続く) */
   private advanceWave(ev: BattleEvent[]): void {
     this.waveIndex += 1;
-    this.fleeAttempts = 0;
     // 小休止: 生存メンバーのHP/MPを回復
     let rested = false;
     for (const u of this.aliveAllies()) {

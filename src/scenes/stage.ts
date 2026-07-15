@@ -51,8 +51,8 @@ export class StageScene implements Scene {
       this.phase = 'failed';
       return;
     }
-    if (result === 'flee') {
-      this.app.scenes.pop(); // ステージから撤退してセレクトへ
+    if (result === 'retire') {
+      this.app.scenes.pop(); // リタイア: そのままクエストセレクトへ
       return;
     }
     this.grantClear();

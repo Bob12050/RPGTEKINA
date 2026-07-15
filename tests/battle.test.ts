@@ -65,20 +65,23 @@ describe('Battle', () => {
     expect(unit.hp).toBeGreaterThan(10);
   });
 
-  it('ボスWAVEからは逃げられない', () => {
-    setRandomSource(() => 0);
-    const ally = createMonster('grandragon', 50);
+  it('リタイアはいつでも確実に成功する(ボス戦でも)', () => {
+    const ally = createMonster('puni', 5);
     const battle = singleWave([ally], [{ speciesId: 'tekina', level: 32 }], true);
-    battle.executeTurn({ kind: 'flee' });
-    expect(battle.result).not.toBe('flee');
+    const events = battle.retire();
+    expect(battle.result).toBe('retire');
+    expect(events.some((e) => e.type === 'end' && e.result === 'retire')).toBe(true);
+    expect(battle.rewards.exp).toBe(0); // 報酬はなし
   });
 
-  it('通常WAVEでは逃げられる(乱数が有利なら)', () => {
-    setRandomSource(() => 0);
-    const ally = createMonster('puni', 5);
+  it('決着後のリタイアは何もしない', () => {
+    setRandomSource(() => 0.5);
+    const ally = createMonster('tekina', 50);
     const battle = singleWave([ally], [{ speciesId: 'puni', level: 1 }]);
-    battle.executeTurn({ kind: 'flee' });
-    expect(battle.result).toBe('flee');
+    battle.executeTurn({ kind: 'fight', actions: fightAll(battle) });
+    expect(battle.result).toBe('win');
+    expect(battle.retire()).toEqual([]);
+    expect(battle.result).toBe('win'); // 勝利が上書きされない
   });
 
   it('syncBack で戦闘結果が元の個体に反映される', () => {
