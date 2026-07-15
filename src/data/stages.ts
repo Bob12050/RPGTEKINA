@@ -269,40 +269,119 @@ export const EVENT_STAGES: StageDef[] = [
     drops: [{ itemId: 'lifeleaf', chance: 0.15, count: 1 }],
     monsterDrops: [{ speciesId: 'hydra', level: 28, chance: 0.08 }],
   }),
+];
 
-  // ---- 降臨クエスト(強敵を たおすと そのボスが 確定で なかまに!) ----
-  q({
-    id: 'advent-vritra', areaId: 'event', name: '【降臨】りゅうしんヴリトラ', recLevel: 40, requires: 'lair-2', boss: true, advent: true,
-    desc: 'てんちそうぞうの りゅうしんが こうりんした! うちかてば なかまに なる!!',
-    enemies: [{ speciesId: 'vritra', level: 42 }],
-    rewardGold: 3000, rewardOrbs: 30, rewardItems: [{ itemId: 'lifeleaf', count: 3 }],
-    firstClearMonster: { speciesId: 'vritra', level: 30 },
-    monsterDrops: [{ speciesId: 'vritra', level: 30, chance: 0.2 }],
+// ============================================================
+// 降臨クエスト(モンスト式・難易度つき)
+//   1体の降臨ボスに 初級 → 中級 → 上級 → 極 の4難易度。
+//   下の難易度を クリアすると 上が 解放される。
+//   初回撃破で ボスが 確定加入(高難度ほど 高レベルで やってくる)。
+// ============================================================
+
+/** 降臨ボス1体ぶんのまとまり(難易度ティアを束ねる) */
+export interface AdventGroup {
+  id: string;
+  name: string;
+  /** ボスの種族ID */
+  boss: string;
+  /** 最初の難易度を解放する条件(ストーリーのステージID) */
+  requires: string;
+  /** 難易度ティア(初級→極の順) */
+  tiers: StageDef[];
+}
+
+/** 難易度ティアの共通スケール */
+const ADVENT_TIERS = [
+  { key: '初級', off: 0, orbs: 10, gold: 1500, items: [{ itemId: 'lifeleaf', count: 1 }] },
+  { key: '中級', off: 6, orbs: 20, gold: 2500, items: [{ itemId: 'lifeleaf', count: 2 }] },
+  { key: '上級', off: 12, orbs: 30, gold: 4000, items: [{ itemId: 'lifeleaf', count: 3 }, { itemId: 'magicwater', count: 2 }] },
+  { key: '極', off: 18, orbs: 50, gold: 7000, items: [{ itemId: 'lifeleaf', count: 5 }, { itemId: 'magicwater', count: 4 }] },
+] as const;
+
+const clampLv = (n: number): number => Math.max(1, Math.min(50, n));
+
+interface AdventInput {
+  id: string;
+  name: string;
+  boss: string;
+  requires: string;
+  /** ★2 の助っ人など、中級以上に増える おともの種族(任意) */
+  minion?: string;
+  /** 初級でのボスレベル */
+  baseLevel: number;
+  /** 初級でのすいしょうレベル */
+  baseRec: number;
+  /** 初級での加入レベル */
+  joinBase: number;
+  desc: string;
+}
+
+function buildAdvent(g: AdventInput): AdventGroup {
+  const tiers = ADVENT_TIERS.map((t, i) => {
+    const bossLv = clampLv(g.baseLevel + t.off);
+    const enemies: StageEnemy[] = [{ speciesId: g.boss, level: bossLv }];
+    if (i >= 1 && g.minion) enemies.push({ speciesId: g.minion, level: clampLv(bossLv - 6) });
+    if (i >= 3 && g.minion) enemies.push({ speciesId: g.minion, level: clampLv(bossLv - 3) });
+    const joinLv = clampLv(g.joinBase + t.off);
+    return q({
+      id: `advent-${g.id}-${i + 1}`,
+      areaId: 'advent',
+      name: `${g.name}【${t.key}】`,
+      recLevel: clampLv(g.baseRec + t.off),
+      enemies,
+      boss: true,
+      advent: true,
+      requires: i === 0 ? g.requires : `advent-${g.id}-${i}`,
+      rewardGold: t.gold,
+      rewardOrbs: t.orbs,
+      rewardItems: [...t.items],
+      firstClearMonster: { speciesId: g.boss, level: joinLv },
+      monsterDrops: [{ speciesId: g.boss, level: joinLv, chance: 0.25 }],
+      desc: g.desc,
+    });
+  });
+  return { id: g.id, name: g.name, boss: g.boss, requires: g.requires, tiers };
+}
+
+export const ADVENT_GROUPS: AdventGroup[] = [
+  buildAdvent({
+    id: 'vritra', name: 'りゅうしんヴリトラ', boss: 'vritra', requires: 'lair-2', minion: 'wyvern',
+    baseLevel: 28, baseRec: 30, joinBase: 20,
+    desc: 'てんちそうぞうの りゅうしんが こうりん! うちかてば なかまに なる!!',
   }),
-  q({
-    id: 'advent-odin', areaId: 'event', name: '【降臨】しんおうオーディン', recLevel: 44, requires: 'trial-2', boss: true, advent: true,
-    desc: 'てんくうの おうが こうりんした! かために せかいを うつす かみを うちやぶれ!',
-    enemies: [{ speciesId: 'odin', level: 46 }, { speciesId: 'valkyrie', level: 40 }],
-    rewardGold: 4000, rewardOrbs: 35, rewardItems: [{ itemId: 'lifeleaf', count: 4 }, { itemId: 'magicwater', count: 3 }],
-    firstClearMonster: { speciesId: 'odin', level: 35 },
-    monsterDrops: [{ speciesId: 'odin', level: 35, chance: 0.2 }],
+  buildAdvent({
+    id: 'odin', name: 'しんおうオーディン', boss: 'odin', requires: 'trial-2', minion: 'valkyrie',
+    baseLevel: 30, baseRec: 34, joinBase: 24,
+    desc: 'てんくうの おうが こうりん! かために せかいを うつす かみを うちやぶれ!',
   }),
-  q({
-    id: 'advent-gaia', areaId: 'event', name: '【降臨】だいちしんガイア', recLevel: 48, requires: 'trial-3', boss: true, advent: true,
-    desc: 'だいちそのものが いしを もった きょじゅう。さいごの しれんを のりこえろ!',
-    enemies: [{ speciesId: 'gaia', level: 50 }, { speciesId: 'behemoth', level: 45 }],
-    rewardGold: 6000, rewardOrbs: 40, rewardItems: [{ itemId: 'lifeleaf', count: 5 }, { itemId: 'magicwater', count: 5 }],
-    firstClearMonster: { speciesId: 'gaia', level: 40 },
-    monsterDrops: [{ speciesId: 'gaia', level: 40, chance: 0.2 }],
+  buildAdvent({
+    id: 'gaia', name: 'だいちしんガイア', boss: 'gaia', requires: 'trial-3', minion: 'behemoth',
+    baseLevel: 32, baseRec: 38, joinBase: 26,
+    desc: 'だいちそのものが いしを もった きょじゅう。さいごの ちからだめし!',
   }),
 ];
 
-const stageMap = new Map([...STAGES, ...TRAINING_STAGES, ...EVENT_STAGES].map((s) => [s.id, s]));
+/** 全降臨ティアを平坦化(getStage 解決用) */
+export const ADVENT_STAGES: StageDef[] = ADVENT_GROUPS.flatMap((g) => g.tiers);
+
+const stageMap = new Map(
+  [...STAGES, ...TRAINING_STAGES, ...EVENT_STAGES, ...ADVENT_STAGES].map((s) => [s.id, s]),
+);
 const areaMap = new Map(AREAS.map((a) => [a.id, a]));
 
 /** 育成/イベントなど「解放条件つき単体クエスト」の解放判定 */
 export function isExtraStageUnlocked(stage: StageDef, cleared: readonly string[]): boolean {
   return stage.requires === undefined || cleared.includes(stage.requires);
+}
+
+/** 降臨グループが挑戦可能か(初級が解放されているか) */
+export function isAdventUnlocked(group: AdventGroup, cleared: readonly string[]): boolean {
+  return cleared.includes(group.requires);
+}
+
+/** 降臨グループのクリア進捗(いくつの難易度をクリアしたか) */
+export function adventProgress(group: AdventGroup, cleared: readonly string[]): { done: number; total: number } {
+  return { done: group.tiers.filter((t) => cleared.includes(t.id)).length, total: group.tiers.length };
 }
 
 export function getStage(id: string): StageDef {

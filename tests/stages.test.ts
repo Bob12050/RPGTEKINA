@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { hasSpecies } from '../src/data/monsters';
 import { getItem } from '../src/data/items';
 import {
+  adventProgress,
+  ADVENT_GROUPS,
+  ADVENT_STAGES,
   AREAS,
   areaProgress,
   EVENT_STAGES,
@@ -10,6 +13,7 @@ import {
   getArea,
   getStage,
   hasStage,
+  isAdventUnlocked,
   isAreaUnlocked,
   isExtraStageUnlocked,
   isStageUnlocked,
@@ -175,7 +179,7 @@ describe('エリア/クエストデータ', () => {
 });
 
 describe('育成/イベントクエスト', () => {
-  const EXTRAS = [...TRAINING_STAGES, ...EVENT_STAGES];
+  const EXTRAS = [...TRAINING_STAGES, ...EVENT_STAGES, ...ADVENT_STAGES];
 
   it('IDが重複せず、getStage/hasStage で引ける', () => {
     const ids = EXTRAS.map((s) => s.id);
@@ -214,15 +218,37 @@ describe('育成/イベントクエスト', () => {
   });
 
   it('降臨クエストが存在し、確定加入モンスターが実在する', () => {
-    const advents = EVENT_STAGES.filter((s) => s.advent);
-    expect(advents.length).toBeGreaterThan(0);
-    for (const s of advents) {
+    expect(ADVENT_STAGES.length).toBeGreaterThan(0);
+    for (const s of ADVENT_STAGES) {
+      expect(s.advent, `${s.id} は降臨`).toBe(true);
       expect(s.boss, `${s.id} はボス扱い`).toBe(true);
       expect(s.firstClearMonster, `${s.id} の確定加入`).toBeDefined();
       const fc = s.firstClearMonster!;
       expect(hasSpecies(fc.speciesId), `${s.id} の ${fc.speciesId}`).toBe(true);
       expect(fc.level).toBeGreaterThanOrEqual(1);
       expect(fc.level).toBeLessThanOrEqual(50);
+    }
+  });
+
+  it('降臨グループは難易度が段階解放され、上ほど強く報酬も多い', () => {
+    for (const g of ADVENT_GROUPS) {
+      expect(g.tiers.length, `${g.id} の難易度数`).toBeGreaterThanOrEqual(2);
+      // グループ解放は requires(ストーリー)で判定
+      expect(isAdventUnlocked(g, []), `${g.id} は未クリアで封鎖`).toBe(false);
+      expect(isAdventUnlocked(g, [g.requires]), `${g.id} は条件クリアで解放`).toBe(true);
+
+      // 初級は requires=ストーリー、それ以降は前の難易度クリアが条件
+      expect(g.tiers[0]!.requires).toBe(g.requires);
+      for (let i = 1; i < g.tiers.length; i++) {
+        expect(g.tiers[i]!.requires, `${g.tiers[i]!.id} の解放条件`).toBe(g.tiers[i - 1]!.id);
+        // 難易度が上がるほど すいしょうLv・オーブ・加入Lvが単調増加(または同等)
+        expect(g.tiers[i]!.recLevel).toBeGreaterThanOrEqual(g.tiers[i - 1]!.recLevel);
+        expect(g.tiers[i]!.rewardOrbs).toBeGreaterThanOrEqual(g.tiers[i - 1]!.rewardOrbs);
+        expect(g.tiers[i]!.firstClearMonster!.level).toBeGreaterThanOrEqual(g.tiers[i - 1]!.firstClearMonster!.level);
+      }
+      // 進捗計算
+      expect(adventProgress(g, [])).toEqual({ done: 0, total: g.tiers.length });
+      expect(adventProgress(g, [g.tiers[0]!.id]).done).toBe(1);
     }
   });
 });

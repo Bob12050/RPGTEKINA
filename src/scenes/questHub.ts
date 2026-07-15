@@ -3,10 +3,10 @@
 // ============================================================
 import type { App } from '../core/app';
 import type { Scene } from '../core/scene';
-import { EVENT_STAGES, TRAINING_STAGES } from '../data/stages';
+import { ADVENT_GROUPS, EVENT_STAGES, TRAINING_STAGES } from '../data/stages';
 import { drawFancyBg } from '../ui/bg';
 import { BackButton, Button, drawText, FONT_SMALL, isPortrait, view } from '../ui/window';
-import { ExtraQuestScene } from './extraQuest';
+import { ExtraQuestScene, stageEntries, type QuestEntry } from './extraQuest';
 import { StageSelectScene } from './stageSelect';
 
 interface Category {
@@ -39,11 +39,17 @@ export class QuestHubScene implements Scene {
       case 0:
         this.app.scenes.push(new StageSelectScene(this.app));
         break;
-      case 1:
-        this.app.scenes.push(new ExtraQuestScene(this.app, 'イベントクエスト', EVENT_STAGES, 'gacha'));
+      case 1: {
+        // 通常イベント + 降臨グループ
+        const entries: QuestEntry[] = [
+          ...stageEntries(EVENT_STAGES),
+          ...ADVENT_GROUPS.map((group) => ({ type: 'advent' as const, group })),
+        ];
+        this.app.scenes.push(new ExtraQuestScene(this.app, 'イベントクエスト', entries, 'gacha'));
         break;
+      }
       case 2:
-        this.app.scenes.push(new ExtraQuestScene(this.app, '育成クエスト', TRAINING_STAGES, 'map'));
+        this.app.scenes.push(new ExtraQuestScene(this.app, '育成クエスト', stageEntries(TRAINING_STAGES), 'map'));
         break;
     }
   }
