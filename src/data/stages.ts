@@ -76,6 +76,21 @@ export function repeatGold(stage: StageDef): number {
   return Math.max(10, Math.floor(stage.rewardGold * REPEAT_GOLD_RATIO));
 }
 
+/** ノーマルクエスト(ストーリーのエリアに属する通常クエスト)かどうか */
+export function isNormalQuest(stage: StageDef): boolean {
+  return AREAS.some((a) => a.id === stage.areaId);
+}
+
+/**
+ * 周回でもらえるオーブ(=石掘り)。
+ * ノーマルクエストだけ、2回目以降のクリアでも少しずつオーブが貯まる。
+ * おくのエリアほど効率がよい。
+ */
+export function repeatOrbs(stage: StageDef): number {
+  if (!isNormalQuest(stage)) return 0;
+  return Math.max(1, Math.floor(stage.recLevel / 6));
+}
+
 export const AREAS: AreaDef[] = [
   { id: 'plains', name: 'そよかぜ草原', desc: 'ぼうけんの はじまりの ち。よわい モンスターが おおい。', postgame: false, iconSpecies: 'puni' },
   { id: 'forest', name: 'こもれびの森', desc: 'ふかい みどりの もり。しぜんの モンスターの なわばり。', postgame: false, iconSpecies: 'treant' },

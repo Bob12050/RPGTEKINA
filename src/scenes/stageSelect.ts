@@ -10,6 +10,7 @@ import {
   isAreaUnlocked,
   isStageUnlocked,
   questsOf,
+  repeatOrbs,
   type AreaDef,
 } from '../data/stages';
 import { getSpecies } from '../data/monsters';
@@ -193,12 +194,18 @@ export class StageSelectScene implements Scene {
           .join(' / ');
         drawText(ctx, `ドロップ: ${names}`, 32, dy + 44, { font: FONT_SMALL, color: '#8fd4ff' });
       }
-      // 初回クリアのオーブ報酬(未クリアのときだけ)
+      // オーブ報酬: 未クリアは初回ぶん、クリア済みは周回で掘れるオーブ(=石掘り)
       if (!state.clearedStages.includes(quest.id) && quest.rewardOrbs > 0) {
-        drawText(ctx, `しょかい: オーブ×${quest.rewardOrbs}`, view.w - 32, dy + 16, {
+        drawText(ctx, `しょかい: 💎×${quest.rewardOrbs}`, view.w - 32, dy + 16, {
           align: 'right',
           font: FONT_SMALL,
           color: '#ffd94a',
+        });
+      } else if (state.clearedStages.includes(quest.id)) {
+        drawText(ctx, `しゅうかい: 💎×${repeatOrbs(quest)}`, view.w - 32, dy + 16, {
+          align: 'right',
+          font: FONT_SMALL,
+          color: '#8fd4ff',
         });
       }
       drawText(ctx, 'クエストを タップで しゅつげき!', view.w - 32, dy + (p ? 84 : 78), {

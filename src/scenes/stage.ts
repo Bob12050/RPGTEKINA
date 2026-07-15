@@ -8,7 +8,7 @@ import type { Scene } from '../core/scene';
 import { chance } from '../core/rng';
 import { getItem } from '../data/items';
 import { getSpecies } from '../data/monsters';
-import { getStage, repeatGold } from '../data/stages';
+import { getStage, repeatGold, repeatOrbs } from '../data/stages';
 import type { BattleResult, EnemySpec } from '../game/battle';
 import { createMonster, maxStats } from '../game/monster';
 import { addItem, addMonster, healParty, markScouted, markStageCleared } from '../game/state';
@@ -82,6 +82,12 @@ export class StageScene implements Scene {
       const bonus = repeatGold(stage);
       state.gold += bonus;
       pages.push(`しゅうかいボーナス ${bonus}ゴールド!`);
+      // ノーマルクエストは周回でオーブが少しずつ貯まる(=石掘り)
+      const ro = repeatOrbs(stage);
+      if (ro > 0) {
+        state.orbs += ro;
+        pages.push(`💎 オーブ ×${ro} を ほりあてた!`);
+      }
     }
 
     // 周回ドロップ(毎回抽選)

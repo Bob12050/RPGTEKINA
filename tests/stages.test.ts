@@ -16,9 +16,11 @@ import {
   isAdventUnlocked,
   isAreaUnlocked,
   isExtraStageUnlocked,
+  isNormalQuest,
   isStageUnlocked,
   questsOf,
   repeatGold,
+  repeatOrbs,
   STAGES,
   TRAINING_STAGES,
 } from '../src/data/stages';
@@ -171,6 +173,18 @@ describe('エリア/クエストデータ', () => {
     }
   });
 
+  it('ノーマルクエストは周回でオーブが掘れる(石掘り)。奥ほど効率がよい', () => {
+    // 全ノーマルクエストは repeatOrbs > 0
+    for (const s of STAGES) {
+      expect(isNormalQuest(s), s.id).toBe(true);
+      expect(repeatOrbs(s), s.id).toBeGreaterThan(0);
+    }
+    // エリアが進むほど周回オーブは減らない(単調増加ぎみ)
+    const first = repeatOrbs(questsOf('plains')[0]!);
+    const last = repeatOrbs(questsOf('trial')[questsOf('trial').length - 1]!);
+    expect(last).toBeGreaterThan(first);
+  });
+
   it('エリアの代表モンスターが実在する', () => {
     for (const a of AREAS) {
       expect(hasSpecies(a.iconSpecies), a.id).toBe(true);
@@ -214,6 +228,13 @@ describe('育成/イベントクエスト', () => {
       expect(hasStage(s.requires), `${s.id} の requires ${s.requires}`).toBe(true);
       expect(isExtraStageUnlocked(s, []), `${s.id} は未クリアで封鎖`).toBe(false);
       expect(isExtraStageUnlocked(s, [s.requires]), `${s.id} は条件クリアで解放`).toBe(true);
+    }
+  });
+
+  it('育成/イベント/降臨は石掘り対象ではない(repeatOrbs=0)', () => {
+    for (const s of EXTRAS) {
+      expect(isNormalQuest(s), s.id).toBe(false);
+      expect(repeatOrbs(s), s.id).toBe(0);
     }
   });
 

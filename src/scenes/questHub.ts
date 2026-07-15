@@ -17,8 +17,8 @@ interface Category {
 }
 
 const CATEGORIES: Category[] = [
-  { icon: '⚔️', label: 'ノーマルクエスト', sub: 'ストーリーを すすめる ぼうけん', color: '#c2452e' },
-  { icon: '🎁', label: 'イベントクエスト', sub: 'とくべつな ボス & レア報酬', color: '#7a3ad6' },
+  { icon: '⚔️', label: 'ノーマルクエスト', sub: '周回で 💎オーブを ほりあてる (石ほり)', color: '#c2452e' },
+  { icon: '🎁', label: 'イベントクエスト', sub: 'とくべつな ボス & レア報酬・降臨', color: '#7a3ad6' },
   { icon: '⭐', label: '育成クエスト', sub: 'メタルで レベルを かせぐ', color: '#2c6a4f' },
 ];
 
