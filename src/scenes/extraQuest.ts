@@ -34,8 +34,9 @@ export class ExtraQuestScene implements Scene {
       this.stages.map((s) => {
         const unlocked = isExtraStageUnlocked(s, state.clearedStages);
         const cleared = state.clearedStages.includes(s.id);
+        const icon = s.advent ? '🔥 ' : s.boss ? '👑 ' : '';
         return {
-          label: unlocked ? `${s.boss ? '👑 ' : ''}${s.name}` : '？？？',
+          label: unlocked ? `${icon}${s.name}` : '？？？',
           note: !unlocked ? '🔒' : cleared ? 'クリア' : `Lv${s.recLevel}`,
           disabled: !unlocked,
         };
@@ -104,14 +105,18 @@ export class ExtraQuestScene implements Scene {
       return;
     }
 
-    drawText(
-      ctx,
-      `${stage.boss ? '👑 ボスバトル' : `てき ${stage.enemies.length}たい`}  /  すいしょうLv${stage.recLevel}`,
-      32,
-      dy + 16,
-      { font: FONT_SMALL, color: stage.boss ? '#f0a05a' : '#ccccee' },
-    );
+    const headLabel = stage.advent ? '🔥 降臨バトル' : stage.boss ? '👑 ボスバトル' : `てき ${stage.enemies.length}たい`;
+    drawText(ctx, `${headLabel}  /  すいしょうLv${stage.recLevel}`, 32, dy + 16, {
+      font: FONT_SMALL,
+      color: stage.advent ? '#ff9a6a' : stage.boss ? '#f0a05a' : '#ccccee',
+    });
     let ly = dy + 44;
+    // 降臨: 初回撃破で確定加入をアピール(未クリアのときだけ)
+    if (stage.advent && stage.firstClearMonster && !state.clearedStages.includes(stage.id)) {
+      const sp = getSpecies(stage.firstClearMonster.speciesId);
+      drawText(ctx, `⚡ しょうりで「${sp.name}」が なかまに かくてい!`, 32, ly, { font: FONT_SMALL, color: '#ffd94a' });
+      ly += 26;
+    }
     if (stage.desc) {
       wrapText(ctx, stage.desc, view.w - 72, FONT_SMALL).forEach((line) => {
         drawText(ctx, line, 32, ly, { font: FONT_SMALL, color: '#cfe0ff' });

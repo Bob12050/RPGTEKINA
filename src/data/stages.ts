@@ -63,6 +63,10 @@ export interface StageDef {
   requires?: string;
   /** 一覧に出す短い説明(育成/イベント用) */
   desc?: string;
+  /** 降臨クエスト(モンスト式): 特別演出 + 初回撃破でボスが確定で仲間になる */
+  advent?: boolean;
+  /** 初回クリアで確定加入するモンスター(降臨のごほうび) */
+  firstClearMonster?: { speciesId: string; level: number };
 }
 
 /** 2回目以降のクリアでもらえる周回ゴールドの倍率 */
@@ -264,6 +268,32 @@ export const EVENT_STAGES: StageDef[] = [
     rewardGold: 800, rewardOrbs: 30, rewardItems: [{ itemId: 'lifeleaf', count: 2 }, { itemId: 'magicwater', count: 3 }],
     drops: [{ itemId: 'lifeleaf', chance: 0.15, count: 1 }],
     monsterDrops: [{ speciesId: 'hydra', level: 28, chance: 0.08 }],
+  }),
+
+  // ---- 降臨クエスト(強敵を たおすと そのボスが 確定で なかまに!) ----
+  q({
+    id: 'advent-vritra', areaId: 'event', name: '【降臨】りゅうしんヴリトラ', recLevel: 40, requires: 'lair-2', boss: true, advent: true,
+    desc: 'てんちそうぞうの りゅうしんが こうりんした! うちかてば なかまに なる!!',
+    enemies: [{ speciesId: 'vritra', level: 42 }],
+    rewardGold: 3000, rewardOrbs: 30, rewardItems: [{ itemId: 'lifeleaf', count: 3 }],
+    firstClearMonster: { speciesId: 'vritra', level: 30 },
+    monsterDrops: [{ speciesId: 'vritra', level: 30, chance: 0.2 }],
+  }),
+  q({
+    id: 'advent-odin', areaId: 'event', name: '【降臨】しんおうオーディン', recLevel: 44, requires: 'trial-2', boss: true, advent: true,
+    desc: 'てんくうの おうが こうりんした! かために せかいを うつす かみを うちやぶれ!',
+    enemies: [{ speciesId: 'odin', level: 46 }, { speciesId: 'valkyrie', level: 40 }],
+    rewardGold: 4000, rewardOrbs: 35, rewardItems: [{ itemId: 'lifeleaf', count: 4 }, { itemId: 'magicwater', count: 3 }],
+    firstClearMonster: { speciesId: 'odin', level: 35 },
+    monsterDrops: [{ speciesId: 'odin', level: 35, chance: 0.2 }],
+  }),
+  q({
+    id: 'advent-gaia', areaId: 'event', name: '【降臨】だいちしんガイア', recLevel: 48, requires: 'trial-3', boss: true, advent: true,
+    desc: 'だいちそのものが いしを もった きょじゅう。さいごの しれんを のりこえろ!',
+    enemies: [{ speciesId: 'gaia', level: 50 }, { speciesId: 'behemoth', level: 45 }],
+    rewardGold: 6000, rewardOrbs: 40, rewardItems: [{ itemId: 'lifeleaf', count: 5 }, { itemId: 'magicwater', count: 5 }],
+    firstClearMonster: { speciesId: 'gaia', level: 40 },
+    monsterDrops: [{ speciesId: 'gaia', level: 40, chance: 0.2 }],
   }),
 ];
 

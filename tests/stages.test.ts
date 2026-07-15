@@ -212,4 +212,17 @@ describe('育成/イベントクエスト', () => {
       expect(isExtraStageUnlocked(s, [s.requires]), `${s.id} は条件クリアで解放`).toBe(true);
     }
   });
+
+  it('降臨クエストが存在し、確定加入モンスターが実在する', () => {
+    const advents = EVENT_STAGES.filter((s) => s.advent);
+    expect(advents.length).toBeGreaterThan(0);
+    for (const s of advents) {
+      expect(s.boss, `${s.id} はボス扱い`).toBe(true);
+      expect(s.firstClearMonster, `${s.id} の確定加入`).toBeDefined();
+      const fc = s.firstClearMonster!;
+      expect(hasSpecies(fc.speciesId), `${s.id} の ${fc.speciesId}`).toBe(true);
+      expect(fc.level).toBeGreaterThanOrEqual(1);
+      expect(fc.level).toBeLessThanOrEqual(50);
+    }
+  });
 });

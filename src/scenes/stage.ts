@@ -92,6 +92,17 @@ export class StageScene implements Scene {
       }
     }
 
+    // 降臨クエスト: 初回撃破でボスが確定加入!
+    if (firstClear && stage.firstClearMonster) {
+      const fc = stage.firstClearMonster;
+      const sp = getSpecies(fc.speciesId);
+      markScouted(state, fc.speciesId);
+      const where = addMonster(state, createMonster(fc.speciesId, fc.level));
+      pages.push(`🎉 ${sp.name}が しょうぶに まけて なかまに なった!!`);
+      if (where === 'full') pages.push(`しかし ボックスが いっぱいで つれて かえれなかった…。`);
+      else pages.push(where === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ボックスへ!`);
+    }
+
     // モンスタードロップ(毎回それぞれ抽選・モンスト式)
     for (const md of stage.monsterDrops ?? []) {
       if (!chance(md.chance)) continue;
@@ -151,9 +162,10 @@ export class StageScene implements Scene {
 
     if (this.phase === 'intro') {
       drawText(ctx, stage.name, cx, p ? 70 : 90, { align: 'center', color: '#ffd94a' });
-      drawText(ctx, stage.boss ? 'ボスバトル!!' : 'モンスターとの たたかい', cx, p ? 110 : 140, {
+      const subtitle = stage.advent ? '🔥 降臨バトル!! 🔥' : stage.boss ? 'ボスバトル!!' : 'モンスターとの たたかい';
+      drawText(ctx, subtitle, cx, p ? 110 : 140, {
         align: 'center',
-        color: stage.boss ? '#f0823d' : '#ffffff',
+        color: stage.advent ? '#ff7a4a' : stage.boss ? '#f0823d' : '#ffffff',
       });
       drawText(ctx, `すいしょうレベル ${stage.recLevel}`, cx, p ? 150 : 180, {
         align: 'center',
