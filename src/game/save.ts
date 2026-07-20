@@ -2,7 +2,7 @@
 // セーブ / ロード (localStorage)
 // テスト用にストレージを差し替えられるようにしてある。
 // ============================================================
-import type { GameState } from '../core/types';
+import type { GameState, MonsterInstance } from '../core/types';
 import { SAVE_VERSION } from '../core/types';
 
 export interface StorageLike {
@@ -116,7 +116,13 @@ function migrate(state: GameState): GameState | null {
   for (const id of REMOVED_ITEMS) delete items[id];
   const orbs = typeof state.orbs === 'number' ? state.orbs : MIGRATION_ORBS;
 
-  const migrated: GameState = { ...state, version: SAVE_VERSION, clearedStages: cleared, items, orbs };
+  // v4 → v5(ラック導入): ラックの無い個体は 1 で初期化
+  const fixLuck = (m: MonsterInstance): MonsterInstance =>
+    typeof m.luck === 'number' ? m : { ...m, luck: 1 };
+  const party = Array.isArray(state.party) ? state.party.map(fixLuck) : state.party;
+  const farm = Array.isArray(state.farm) ? state.farm.map(fixLuck) : (state.farm ?? []);
+
+  const migrated: GameState = { ...state, version: SAVE_VERSION, clearedStages: cleared, items, orbs, party, farm };
   // 旧時代のフィールドは破棄
   delete (migrated as GameState & LegacyFields).mapId;
   delete (migrated as GameState & LegacyFields).x;

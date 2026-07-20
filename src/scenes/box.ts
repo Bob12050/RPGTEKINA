@@ -10,6 +10,7 @@ import type { MonsterInstance } from '../core/types';
 import { FARM_MAX, PARTY_MAX, rankStars } from '../core/types';
 import { getSpecies } from '../data/monsters';
 import { maxStats } from '../game/monster';
+import { partyLuck } from '../game/state';
 import { monsterLabel, RANK_COLORS } from '../ui/format';
 import { drawFancyBg } from '../ui/bg';
 import { drawMonster } from '../ui/sprites';
@@ -228,8 +229,9 @@ export class MonsterBoxScene implements Scene {
     drawChip(ctx, view.w - 20 - 130, 14, 130, 34, `📦 ${state.farm.length}/${FARM_MAX}`, '#ccccee');
     this.backButton.draw(ctx);
 
+    const luckLabel = `パーティ (${state.party.length}/${PARTY_MAX})  🍀ラック計 ${partyLuck(state)}`;
     if (p) {
-      drawText(ctx, `パーティ (${state.party.length}/${PARTY_MAX})`, 16, 66, { font: FONT_SMALL, color: '#8fd4ff' });
+      drawText(ctx, luckLabel, 16, 66, { font: FONT_SMALL, color: '#8fd4ff' });
       this.drawPartyRow(ctx, 12, 90, view.w - 24, 116);
       drawText(ctx, 'ボックス', 16, 218, { font: FONT_SMALL, color: '#8fd4ff' });
       this.drawBoxGrid(ctx, 12, 242, view.w - 24, 4, 4, 98);
@@ -240,7 +242,7 @@ export class MonsterBoxScene implements Scene {
         color: '#aaaacc',
       });
     } else {
-      drawText(ctx, `パーティ (${state.party.length}/${PARTY_MAX})`, 26, 66, { font: FONT_SMALL, color: '#8fd4ff' });
+      drawText(ctx, luckLabel, 26, 66, { font: FONT_SMALL, color: '#8fd4ff' });
       this.drawPartyRow(ctx, 24, 90, 520, 112);
       drawText(ctx, 'ボックス', 26, 216, { font: FONT_SMALL, color: '#8fd4ff' });
       this.drawBoxGrid(ctx, 24, 240, view.w - 48, 8, 2, 100);
@@ -328,6 +330,8 @@ export class MonsterBoxScene implements Scene {
 
     const bounce = selected ? Math.sin(this.time * 4) * 2 : 0;
     drawMonster(ctx, sp.family, sp.palette, x + w / 2 - 24, y + 6 + bounce, 3);
+    // ラック(右上)
+    drawText(ctx, `🍀${m.luck ?? 1}`, x + w - 6, y + 5, { align: 'right', font: FONT_SMALL, color: '#8fe89a' });
     drawText(ctx, `Lv${m.level}`, x + 8, y + h - 24, { font: FONT_SMALL, color: '#ccccee' });
     drawText(ctx, `★${rankStars(sp.rank)}`, x + w - 8, y + h - 24, { align: 'right', font: FONT_SMALL, color: RANK_COLORS[sp.rank] });
     if (showHp) {

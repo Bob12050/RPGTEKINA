@@ -4,7 +4,7 @@
 import type { App } from '../core/app';
 import type { Scene } from '../core/scene';
 import type { MonsterInstance } from '../core/types';
-import { STAT_NAMES } from '../core/types';
+import { MAX_LUCK, STAT_NAMES } from '../core/types';
 import { getSkill } from '../data/skills';
 import { getSpecies } from '../data/monsters';
 import { expToNext, maxStats } from '../game/monster';
@@ -73,7 +73,7 @@ export class StatusScene implements Scene {
         drawText(ctx, label, x + 28 + col * 220, y + 326 + row * 30, { font: FONT_SMALL });
         drawText(ctx, String(value), x + 28 + col * 220 + 180, y + 326 + row * 30, { align: 'right', font: FONT_SMALL });
       });
-      drawText(ctx, `プラスち +${m.plus}`, x + w - 28, y + 296, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
+      drawText(ctx, `🍀 ラック ${m.luck ?? 1}/${MAX_LUCK}`, x + w - 28, y + 296, { align: 'right', font: FONT_SMALL, color: '#8fe89a' });
 
       drawText(ctx, 'とくぎ', x + 28, y + 400, { color: '#ffd94a', font: FONT_SMALL });
       if (m.skillIds.length === 0) {
@@ -138,6 +138,7 @@ export class StatusScene implements Scene {
       drawText(ctx, String(value), sx + 200, y + 70 + i * 36, { align: 'right' });
     });
     drawText(ctx, `プラスち +${m.plus}`, sx, y + 70 + 4 * 36, { color: '#aaaacc', font: FONT_SMALL });
+    drawText(ctx, `🍀 ラック ${m.luck ?? 1}/${MAX_LUCK}`, sx, y + 70 + 5 * 36, { color: '#8fe89a', font: FONT_SMALL });
 
     // 右: とくぎ
     const kx = x + 320;

@@ -81,6 +81,7 @@ function makeEnemyUnit(speciesId: string, level: number, suffix: string): Battle
     exp: 0,
     plus: 0,
     bonus: { hp: 0, mp: 0, atk: 0, def: 0, agi: 0, wis: 0 },
+    luck: 1,
     skillIds: naturalSkillsAt(speciesId, level),
     hp: 0,
     mp: 0,

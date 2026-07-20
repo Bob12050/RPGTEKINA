@@ -6,8 +6,7 @@ import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
 import { FARM_MAX, PARTY_MAX, rankStars, type SpeciesDef } from '../core/types';
 import { gachaLevel, MULTI_COST, MULTI_COUNT, pullOne, pullTen, RANK_RATES, SINGLE_COST } from '../data/gacha';
-import { createMonster } from '../game/monster';
-import { addMonster, markScouted } from '../game/state';
+import { obtainMonster, type ObtainResult } from '../game/state';
 import { RANK_COLORS } from '../ui/format';
 import { drawFancyBg } from '../ui/bg';
 import { drawMonster } from '../ui/sprites';
@@ -18,7 +17,8 @@ type Phase = 'menu' | 'revealSingle' | 'revealMulti' | 'message';
 interface PullResult {
   species: SpeciesDef;
   level: number;
-  where: 'party' | 'farm';
+  kind: ObtainResult['kind'];
+  luck: number;
 }
 
 /** 単発演出: この秒数だけタメてから公開 */
@@ -66,10 +66,8 @@ export class GachaScene implements Scene {
     const specs = count === 1 ? [pullOne()] : pullTen();
     this.results = specs.map((sp) => {
       const level = gachaLevel(sp.rank);
-      const joined = createMonster(sp.id, level);
-      markScouted(state, sp.id);
-      const where = addMonster(state, joined);
-      return { species: sp, level, where: where === 'party' ? 'party' : 'farm' };
+      const r = obtainMonster(state, sp.id, level);
+      return { species: sp, level, kind: r.kind, luck: r.luck };
     });
     this.revealT = 0;
     this.phase = count === 1 ? 'revealSingle' : 'revealMulti';
@@ -243,10 +241,16 @@ export class GachaScene implements Scene {
     const stars = '★'.repeat(rankStars(sp.rank));
     drawText(ctx, stars, cx, cy + size / 2 + 30, { align: 'center', color: RANK_COLORS[sp.rank] });
     drawText(ctx, sp.name, cx, cy + size / 2 + 62, { align: 'center', color: RANK_COLORS[sp.rank] });
-    drawText(ctx, `Lv${r.level} で ${r.where === 'party' ? 'パーティに くわわった!' : 'ボックスへ!'}`, cx, cy + size / 2 + 96, {
+    const outcome =
+      r.kind === 'luck'
+        ? `🍀 ラックが ${r.luck}に アップ!`
+        : r.kind === 'full'
+          ? 'ボックスが いっぱい…'
+          : `Lv${r.level} で ${r.kind === 'party' ? 'パーティに くわわった!' : 'ボックスへ!'}`;
+    drawText(ctx, outcome, cx, cy + size / 2 + 96, {
       align: 'center',
       font: FONT_SMALL,
-      color: '#ccccee',
+      color: r.kind === 'luck' ? '#8fe89a' : '#ccccee',
     });
     drawText(ctx, 'タップで もどる', cx, view.h - 60, { align: 'center', font: FONT_SMALL, color: '#aaaacc' });
   }
@@ -283,10 +287,11 @@ export class GachaScene implements Scene {
       drawMonster(ctx, sp.family, sp.palette, x + 18, y - 6, 2);
       drawText(ctx, '★'.repeat(stars), x + 60, y, { font: FONT_SMALL, color: RANK_COLORS[sp.rank] });
       drawText(ctx, sp.name, x + 60 + 130, y, { font: FONT_SMALL, color: RANK_COLORS[sp.rank] });
-      drawText(ctx, r.where === 'party' ? 'パーティ' : 'ボックス', x + w - 20, y, {
+      const tag = r.kind === 'luck' ? `🍀ラック${r.luck}` : r.kind === 'full' ? 'あふれ' : r.kind === 'party' ? 'パーティ' : 'ボックス';
+      drawText(ctx, tag, x + w - 20, y, {
         align: 'right',
         font: FONT_SMALL,
-        color: '#aaaacc',
+        color: r.kind === 'luck' ? '#8fe89a' : '#aaaacc',
       });
     });
 

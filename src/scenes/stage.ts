@@ -10,8 +10,8 @@ import { getItem } from '../data/items';
 import { getSpecies } from '../data/monsters';
 import { getStage, repeatGold, repeatOrbs } from '../data/stages';
 import type { BattleResult, EnemySpec } from '../game/battle';
-import { createMonster, maxStats } from '../game/monster';
-import { addItem, addMonster, healParty, markScouted, markStageCleared } from '../game/state';
+import { maxStats } from '../game/monster';
+import { addItem, healParty, luckDropMult, luckOrbBonus, markStageCleared, obtainMonster } from '../game/state';
 import { drawFancyBg } from '../ui/bg';
 import { Button, drawGauge, drawText, drawWindow, FONT_BIG, FONT_SMALL, hpColor, isPortrait, MessageBox, view } from '../ui/window';
 import { BattleScene } from './battle';
@@ -64,6 +64,7 @@ export class StageScene implements Scene {
     const state = requireState(this.app);
     const stage = getStage(this.stageId);
     const firstClear = markStageCleared(state, this.stageId);
+    const luckMult = luckDropMult(state); // パーティのラックでドロップUP
     const pages = [`${stage.name}を クリア!`];
 
     if (firstClear) {
@@ -82,45 +83,51 @@ export class StageScene implements Scene {
       const bonus = repeatGold(stage);
       state.gold += bonus;
       pages.push(`しゅうかいボーナス ${bonus}ゴールド!`);
-      // ノーマルクエストは周回でオーブが少しずつ貯まる(=石掘り)
+      // ノーマルクエストは周回でオーブが少しずつ貯まる(=石掘り)。ラックでさらに増える
       const ro = repeatOrbs(stage);
       if (ro > 0) {
-        state.orbs += ro;
-        pages.push(`💎 オーブ ×${ro} を ほりあてた!`);
+        const bonusOrbs = luckOrbBonus(state);
+        const total = ro + bonusOrbs;
+        state.orbs += total;
+        pages.push(bonusOrbs > 0 ? `💎 オーブ ×${total} を ほりあてた! (🍀+${bonusOrbs})` : `💎 オーブ ×${total} を ほりあてた!`);
       }
     }
 
-    // 周回ドロップ(毎回抽選)
+    // 周回ドロップ(毎回抽選・ラックで確率UP)
     for (const drop of stage.drops ?? []) {
-      if (chance(drop.chance)) {
+      if (chance(Math.min(1, drop.chance * luckMult))) {
         addItem(state, drop.itemId, drop.count);
         pages.push(`ドロップ! ${getItem(drop.itemId).name} ×${drop.count}`);
       }
     }
 
-    // 降臨クエスト: 初回撃破でボスが確定加入!
+    // 降臨クエスト: 初回撃破でボスが確定加入!(すでに持っていればラックUP)
     if (firstClear && stage.firstClearMonster) {
       const fc = stage.firstClearMonster;
       const sp = getSpecies(fc.speciesId);
-      markScouted(state, fc.speciesId);
-      const where = addMonster(state, createMonster(fc.speciesId, fc.level));
-      pages.push(`🎉 ${sp.name}が しょうぶに まけて なかまに なった!!`);
-      if (where === 'full') pages.push(`しかし ボックスが いっぱいで つれて かえれなかった…。`);
-      else pages.push(where === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ボックスへ!`);
+      const r = obtainMonster(state, fc.speciesId, fc.level);
+      if (r.kind === 'luck') {
+        pages.push(`🎉 ${sp.name}を うちやぶった! 🍀 ラックが ${r.luck}に アップ!`);
+      } else if (r.kind === 'full') {
+        pages.push(`🎉 ${sp.name}を うちやぶったが ボックスが いっぱいだった…。`);
+      } else {
+        pages.push(`🎉 ${sp.name}が しょうぶに まけて なかまに なった!!`);
+        pages.push(r.kind === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ボックスへ!`);
+      }
     }
 
-    // モンスタードロップ(毎回それぞれ抽選・モンスト式)
+    // モンスタードロップ(毎回それぞれ抽選・ラックで確率UP)
     for (const md of stage.monsterDrops ?? []) {
-      if (!chance(md.chance)) continue;
+      if (!chance(Math.min(1, md.chance * luckMult))) continue;
       const sp = getSpecies(md.speciesId);
-      const joined = createMonster(md.speciesId, md.level);
-      markScouted(state, md.speciesId);
-      const where = addMonster(state, joined);
-      if (where === 'full') {
+      const r = obtainMonster(state, md.speciesId, md.level);
+      if (r.kind === 'luck') {
+        pages.push(`おや?! ${sp.name}が なついた! 🍀 ラックが ${r.luck}に アップ!`);
+      } else if (r.kind === 'full') {
         pages.push(`おや?! ${sp.name}が ついてきたが ボックスが いっぱいだった…。`);
       } else {
         pages.push(`おや?! ${sp.name}が なかまに なりたそうに ついてきた!`);
-        pages.push(where === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ボックスへ!`);
+        pages.push(r.kind === 'party' ? `${sp.name}が パーティに くわわった!` : `${sp.name}は ボックスへ!`);
       }
     }
 

@@ -2,7 +2,7 @@
 // ゲーム全体の状態と、それを操作するヘルパー
 // ============================================================
 import type { GameState, MonsterInstance } from '../core/types';
-import { FARM_MAX, PARTY_MAX, SAVE_VERSION } from '../core/types';
+import { FARM_MAX, MAX_LUCK, PARTY_MAX, SAVE_VERSION } from '../core/types';
 import { createMonster, fullHeal } from './monster';
 
 /** はじめから遊ぶとき最初に持っているオーブ(チュートリアル10連ぶん+α) */
@@ -46,6 +46,54 @@ export function addMonster(state: GameState, m: MonsterInstance): 'party' | 'far
     return 'farm';
   }
   return 'full';
+}
+
+/** モンスター入手の結果 */
+export interface ObtainResult {
+  /** party/farm=新規加入 / luck=ダブりでラックUP / full=ボックス満杯で入手できず */
+  kind: 'party' | 'farm' | 'luck' | 'full';
+  species: string;
+  /** ラックUP後(または新規)のラック値 */
+  luck: number;
+}
+
+/** 手持ち+ボックスから、その種族で いちばんラックの高い個体を返す */
+function bestOf(state: GameState, speciesId: string): MonsterInstance | undefined {
+  return [...state.party, ...state.farm]
+    .filter((m) => m.speciesId === speciesId)
+    .sort((a, b) => b.luck - a.luck)[0];
+}
+
+/**
+ * モンスターを入手する(ガチャ・ドロップ・降臨の共通口)。
+ * すでに持っている種族なら、新しく増やさず「ラック(運)」を+1する = モンスト式。
+ * ラックが上限のときだけ 新しい個体として加える。
+ */
+export function obtainMonster(state: GameState, speciesId: string, level: number): ObtainResult {
+  markScouted(state, speciesId);
+  const owned = bestOf(state, speciesId);
+  if (owned && owned.luck < MAX_LUCK) {
+    owned.luck += 1;
+    return { kind: 'luck', species: speciesId, luck: owned.luck };
+  }
+  const m = createMonster(speciesId, level);
+  const where = addMonster(state, m);
+  return { kind: where, species: speciesId, luck: m.luck };
+}
+
+/** パーティのラック合計(石掘り・ドロップのボーナス計算に使う) */
+export function partyLuck(state: GameState): number {
+  return state.party.reduce((s, m) => s + (m.luck ?? 1), 0);
+}
+
+/** ラックによるドロップ率の倍率(1.0〜2.0)。パーティのラックが高いほどよく落ちる */
+export function luckDropMult(state: GameState): number {
+  return Math.min(2, 1 + partyLuck(state) * 0.004);
+}
+
+/** ラックによる石掘りオーブのボーナス(パーティのラック合計に応じて +n 個) */
+export function luckOrbBonus(state: GameState): number {
+  return Math.floor(partyLuck(state) / 40);
 }
 
 export function removeMonster(state: GameState, uid: string): MonsterInstance | null {

@@ -129,6 +129,8 @@ export interface MonsterInstance {
   plus: number;
   /** 永続ステータスボーナス(将来の強化システム用) */
   bonus: Stats;
+  /** ラック(運): 同じ種族を集めるほど上がる。高いほどドロップ&石掘りが増える */
+  luck: number;
   /** 覚えているとくぎ(最大 MAX_SKILLS 個) */
   skillIds: string[];
   /** 現在HP/MP */
@@ -172,4 +174,6 @@ export const PARTY_MAX = 4;
 export const FARM_MAX = 50;
 export const MAX_SKILLS = 6;
 export const MAX_LEVEL = 50;
-export const SAVE_VERSION = 4;
+/** ラックの上限(モンスト風。1体所持=ラック1、集めるほど+1) */
+export const MAX_LUCK = 99;
+export const SAVE_VERSION = 5;

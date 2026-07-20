@@ -143,6 +143,24 @@ describe('セーブ / ロード', () => {
     expect(loaded!.clearedStages).not.toContain('cave-1');
   });
 
+  it('v4セーブ(ラック導入まえ)の個体にラック1が補完される', () => {
+    const v4 = {
+      ...newGame(),
+      version: 4,
+    } as Record<string, unknown>;
+    // ラック未設定の個体を用意
+    const bare = { ...createMonster('wolf', 5) } as Record<string, unknown>;
+    delete bare.luck;
+    v4.party = [bare];
+    v4.farm = [{ ...createMonster('golem', 5), luck: undefined }];
+    storage.setItem('rpgtekina_save_1', JSON.stringify(v4));
+    const loaded = loadGame();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(SAVE_VERSION);
+    expect(loaded!.party[0]!.luck).toBe(1);
+    expect(loaded!.farm[0]!.luck).toBe(1);
+  });
+
   it('ボス未撃破の旧セーブは clearedStages が空で移行される', () => {
     const legacy = {
       version: 1,

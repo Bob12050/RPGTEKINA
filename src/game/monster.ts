@@ -35,6 +35,7 @@ export interface CreateOptions {
   bonus?: Stats;
   skillIds?: string[];
   nickname?: string;
+  luck?: number;
 }
 
 /** モンスター個体を生成する(野生・スカウト・配合すべてここを通る) */
@@ -49,6 +50,7 @@ export function createMonster(speciesId: string, level: number, opts: CreateOpti
     exp: 0,
     plus: opts.plus ?? 0,
     bonus: opts.bonus ?? emptyStats(),
+    luck: opts.luck ?? 1,
     skillIds: (opts.skillIds ?? [...new Set(naturalSkillsAt(speciesId, lv))]).slice(0, MAX_SKILLS),
     hp: 0,
     mp: 0,
