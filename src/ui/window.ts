@@ -52,6 +52,36 @@ export function drawWindow(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.restore();
 }
 
+/** メニューハブ配下で使う、紺地と金の二重枠を持つ上位パネル。 */
+export function drawPremiumPanel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  accent = '#d9ad55',
+): void {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.58)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+  roundRect(ctx, x, y, w, h, 14);
+  const fill = ctx.createLinearGradient(x, y, x + w, y + h);
+  fill.addColorStop(0, 'rgba(15,34,72,0.97)');
+  fill.addColorStop(1, 'rgba(3,12,34,0.99)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  roundRect(ctx, x + 6, y + 6, w - 12, h - 12, 10);
+  ctx.strokeStyle = 'rgba(248,222,154,0.28)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -274,12 +304,16 @@ export class Menu {
   cursor = 0;
   scroll = 0;
   visibleCount: number;
+  rowHeight: number;
+  theme: 'default' | 'premium';
   /** 直近の draw で描いた行のタップ判定領域 */
   private itemRects: { index: number; rect: Rect }[] = [];
 
-  constructor(items: MenuItem[], visibleCount = 8) {
+  constructor(items: MenuItem[], visibleCount = 8, rowHeight = 44, theme: 'default' | 'premium' = 'default') {
     this.items = items;
     this.visibleCount = visibleCount;
+    this.rowHeight = rowHeight;
+    this.theme = theme;
   }
 
   get selected(): MenuItem | undefined {
@@ -348,19 +382,21 @@ export class Menu {
 
   /** ウィンドウ込みで描画する。高さを返す(行はタップしやすい高さ) */
   draw(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, title?: string): number {
-    const lineH = 44;
+    const lineH = this.rowHeight;
     const pad = 14;
     const titleH = title ? 32 : 0;
     const count = Math.min(this.items.length, this.visibleCount);
     const h = pad * 2 + titleH + Math.max(count, 1) * lineH;
-    drawWindow(ctx, x, y, w, h);
+    if (this.theme === 'premium') drawPremiumPanel(ctx, x, y, w, h);
+    else drawWindow(ctx, x, y, w, h);
     if (title) drawText(ctx, title, x + pad + 8, y + pad - 2, { color: '#ffd94a', font: FONT_SMALL });
     const end = Math.min(this.items.length, this.scroll + this.visibleCount);
     this.itemRects = [];
     for (let i = this.scroll; i < end; i++) {
       const item = this.items[i]!;
       const ly = y + pad + titleH + (i - this.scroll) * lineH;
-      const rect: Rect = { x: x + 10, y: ly, w: w - 20, h: lineH - 6 };
+      const rowGap = lineH >= 54 ? 2 : 6;
+      const rect: Rect = { x: x + 10, y: ly, w: w - 20, h: lineH - rowGap };
       this.itemRects.push({ index: i, rect });
       // タップできる行に見えるよう、行ごとに下地を敷く
       ctx.save();
@@ -368,19 +404,24 @@ export class Menu {
       ctx.fillStyle = item.disabled
         ? 'rgba(255,255,255,0.03)'
         : i === this.cursor
-          ? 'rgba(255,217,74,0.18)'
-          : 'rgba(255,255,255,0.07)';
+          ? this.theme === 'premium' ? 'rgba(110,79,25,0.55)' : 'rgba(255,217,74,0.18)'
+          : this.theme === 'premium' ? 'rgba(8,24,55,0.88)' : 'rgba(255,255,255,0.07)';
       ctx.fill();
       if (i === this.cursor && !item.disabled) {
         ctx.strokeStyle = '#ffd94a';
         ctx.lineWidth = 2;
         roundRect(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 7);
         ctx.stroke();
+      } else if (this.theme === 'premium' && !item.disabled) {
+        ctx.strokeStyle = 'rgba(217,173,85,0.18)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
       ctx.restore();
       const color = item.disabled ? '#777788' : '#ffffff';
-      drawText(ctx, item.label, rect.x + 14, ly + 8, { color });
-      if (item.note) drawText(ctx, item.note, rect.x + rect.w - 12, ly + 10, { color, align: 'right', font: FONT_SMALL });
+      const labelY = ly + Math.max(8, (lineH - 28) / 2);
+      drawText(ctx, item.label, rect.x + 14, labelY, { color });
+      if (item.note) drawText(ctx, item.note, rect.x + rect.w - 12, labelY + 2, { color, align: 'right', font: FONT_SMALL });
     }
     // スクロールインジケータ
     if (this.scroll > 0) drawText(ctx, '▲', x + w - 26, y + 8, { font: FONT_SMALL });

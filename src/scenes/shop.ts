@@ -5,11 +5,14 @@ import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
 import { getItem, SHOP_ITEMS } from '../data/items';
 import { addItem } from '../game/state';
-import { BackButton, drawText, drawWindow, FONT_SMALL, Menu, MessageBox, view, isPortrait, wrapText } from '../ui/window';
+import { drawPremiumSceneHeader, premiumBackRect } from '../ui/menuChrome';
+import { createImageAsset, drawCoverImage, imageReady } from '../ui/media';
+import { drawPremiumPanel, drawText, FONT_SMALL, inRect, Menu, MessageBox, view, isPortrait, wrapText } from '../ui/window';
+
+const MENU_BACKGROUND = createImageAsset(new URL('../assets/menu/menu-bg.webp', import.meta.url).href);
 
 export class ShopScene implements Scene {
   private menu: Menu;
-  private backButton = new BackButton();
   private messages = new MessageBox();
   private showingMessage = false;
 
@@ -19,6 +22,9 @@ export class ShopScene implements Scene {
         const item = getItem(id);
         return { label: item.name, note: `${item.price} G` };
       }),
+      8,
+      56,
+      'premium',
     );
   }
 
@@ -55,7 +61,7 @@ export class ShopScene implements Scene {
     }
 
     if (tap) {
-      if (this.backButton.contains(tap.x, tap.y)) {
+      if (inRect(tap.x, tap.y, premiumBackRect())) {
         this.app.scenes.pop();
         return;
       }
@@ -76,25 +82,30 @@ export class ShopScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    if (imageReady(MENU_BACKGROUND)) {
+      drawCoverImage(ctx, MENU_BACKGROUND, { x: 0, y: 0, w: view.w, h: view.h }, 0.5, 0.5);
+    } else {
+      ctx.fillStyle = '#020616';
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+    ctx.fillStyle = 'rgba(1,5,18,0.24)';
     ctx.fillRect(0, 0, view.w, view.h);
     const state = requireState(this.app);
     const p = isPortrait();
 
-    drawWindow(ctx, p ? 12 : 60, p ? 16 : 40, p ? 170 : 320, 52);
-    drawText(ctx, 'どうぐや', p ? 36 : 90, p ? 30 : 54);
+    drawPremiumSceneHeader(ctx, 'ショップ');
     const goldW = p ? 170 : 240;
-    drawWindow(ctx, view.w - goldW - (p ? 12 : 60), p ? 16 : 40, goldW, 52);
-    drawText(ctx, `${state.gold} G`, view.w - (p ? 36 : 90), p ? 30 : 54, { align: 'right', color: '#ffd94a' });
+    drawPremiumPanel(ctx, view.w - goldW - (p ? 12 : 18), p ? 68 : 12, goldW, 52);
+    drawText(ctx, `所持  ${state.gold} G`, view.w - (p ? 36 : 42), p ? 82 : 26, { align: 'right', color: '#ffd94a' });
 
-    this.menu.draw(ctx, p ? 12 : 60, p ? 88 : 120, p ? view.w - 24 : 480, p ? 'しょうひん (A:かう B:やめる)' : 'しょうひん (Zでかう / Xでやめる)');
+    this.menu.draw(ctx, p ? 12 : 60, p ? 132 : 88, p ? view.w - 24 : 480, '商品を選ぶ');
 
     // 選択中アイテムの説明
     const itemId = SHOP_ITEMS[this.menu.cursor];
     if (itemId) {
       const descLines = wrapText(ctx, getItem(itemId).desc, view.w - (p ? 80 : 180), FONT_SMALL);
       const m = p ? 12 : 60;
-      drawWindow(ctx, m, view.h - 150, view.w - m * 2, 60 + descLines.length * 24);
+      drawPremiumPanel(ctx, m, view.h - 150, view.w - m * 2, 60 + descLines.length * 24);
       descLines.forEach((line, i) => drawText(ctx, line, m + 28, view.h - 124 + i * 24, { font: FONT_SMALL }));
     }
     if (this.showingMessage) {

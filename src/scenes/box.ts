@@ -51,6 +51,7 @@ import { drawSpeciesBadge, drawSpeciesPortrait } from '../ui/monsterArt';
 import { drawMonster } from '../ui/sprites';
 import { drawGauge, drawText, hpColor, inRect, isPortrait, view, type Rect } from '../ui/window';
 import { GachaScene } from './gacha';
+import { MenuScene } from './menu';
 import { QuestHubScene } from './questHub';
 import { StatusScene } from './status';
 
@@ -471,9 +472,7 @@ export class MonsterBoxScene implements Scene {
       case 3:
         break;
       case 4:
-        this.app.scenes.pop();
-        this.app.input.virtualPress('menu');
-        this.app.input.virtualRelease('menu');
+        this.switchTab(new MenuScene(this.app));
         break;
     }
   }

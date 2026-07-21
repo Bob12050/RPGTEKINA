@@ -26,6 +26,7 @@ import { drawGauge, drawText, inRect, isPortrait, view, type Rect } from '../ui/
 import { MonsterBoxScene } from './box';
 import { ExtraQuestScene, stageEntries, type QuestEntry } from './extraQuest';
 import { GachaScene } from './gacha';
+import { MenuScene } from './menu';
 import { StageSelectScene } from './stageSelect';
 
 type FocusArea = 'cards' | 'nav';
@@ -164,9 +165,7 @@ export class QuestHubScene implements Scene {
         this.switchTab(new MonsterBoxScene(this.app));
         break;
       case 4:
-        this.app.scenes.pop();
-        this.app.input.virtualPress('menu');
-        this.app.input.virtualRelease('menu');
+        this.switchTab(new MenuScene(this.app));
         break;
     }
   }

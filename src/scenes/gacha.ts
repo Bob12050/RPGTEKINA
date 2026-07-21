@@ -30,6 +30,7 @@ import { createImageAsset, drawCoverImage, imageReady } from '../ui/media';
 import { drawMonster } from '../ui/sprites';
 import { drawText, inRect, isPortrait, view, type Rect } from '../ui/window';
 import { MonsterBoxScene } from './box';
+import { MenuScene } from './menu';
 import { QuestHubScene } from './questHub';
 
 type Phase = 'menu' | 'confirm' | 'rates' | 'history' | 'revealSingle' | 'revealMulti' | 'message';
@@ -299,9 +300,7 @@ export class GachaScene implements Scene {
         this.switchTab(new MonsterBoxScene(this.app));
         break;
       case 4:
-        this.app.scenes.pop();
-        this.app.input.virtualPress('menu');
-        this.app.input.virtualRelease('menu');
+        this.switchTab(new MenuScene(this.app));
         break;
     }
   }

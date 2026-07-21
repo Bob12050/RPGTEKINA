@@ -11,8 +11,13 @@ import { getSkill } from '../data/skills';
 import { SPECIES } from '../data/monsters';
 import { inGachaPool } from '../data/gacha';
 import { STAGES } from '../data/stages';
+import { drawPremiumSceneHeader, premiumBackRect } from '../ui/menuChrome';
+import { createImageAsset, drawCoverImage, imageReady } from '../ui/media';
+import { drawSpeciesPortrait } from '../ui/monsterArt';
 import { drawGridSprite, drawMonster, FAMILY_SPRITES } from '../ui/sprites';
-import { BackButton, drawText, drawWindow, FONT_SMALL, isPortrait, Menu, view, wrapText } from '../ui/window';
+import { drawPremiumPanel, drawText, FONT_SMALL, inRect, isPortrait, Menu, view, wrapText } from '../ui/window';
+
+const MENU_BACKGROUND = createImageAsset(new URL('../assets/menu/menu-bg.webp', import.meta.url).href);
 
 /** 入手ヒント: ガチャ排出か、クエストドロップか */
 function obtainHint(speciesId: string): string | null {
@@ -27,11 +32,10 @@ type Knowledge = 'unknown' | 'seen' | 'scouted';
 
 export class DexScene implements Scene {
   private menu: Menu;
-  private backButton = new BackButton();
   private time = 0;
 
   constructor(private app: App) {
-    this.menu = new Menu([], 12);
+    this.menu = new Menu([], 12, 56, 'premium');
     this.rebuild();
   }
 
@@ -63,7 +67,7 @@ export class DexScene implements Scene {
     this.time += dt;
     const tap = this.app.input.takeTap();
     if (tap) {
-      if (this.backButton.contains(tap.x, tap.y)) {
+      if (inRect(tap.x, tap.y, premiumBackRect())) {
         this.app.scenes.pop();
         return;
       }
@@ -79,36 +83,41 @@ export class DexScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = 'rgba(0, 0, 10, 0.85)';
+    if (imageReady(MENU_BACKGROUND)) {
+      drawCoverImage(ctx, MENU_BACKGROUND, { x: 0, y: 0, w: view.w, h: view.h }, 0.5, 0.5);
+    } else {
+      ctx.fillStyle = '#020616';
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+    ctx.fillStyle = 'rgba(1,5,18,0.28)';
     ctx.fillRect(0, 0, view.w, view.h);
     const state = requireState(this.app);
     const p = isPortrait();
-    this.menu.visibleCount = p ? 5 : 10;
+    this.menu.visibleCount = p ? 5 : 8;
 
     // ヘッダー(コンプリート率)
     const validIds = new Set(SPECIES.map((s) => s.id));
     const seen = state.seenSpecies.filter((id) => validIds.has(id)).length;
     const scouted = state.scoutedSpecies.filter((id) => validIds.has(id)).length;
-    drawWindow(ctx, 12, 12, view.w - 24, 52);
-    drawText(ctx, 'ずかん', p ? 80 : 90, 26, { color: '#ffd94a', font: FONT_SMALL });
-    drawText(ctx, `はっけん ${seen}/${SPECIES.length}  なかま ${scouted}/${SPECIES.length}`, view.w - (p ? 24 : 40), 26, {
-      align: 'right',
-      font: FONT_SMALL,
+    drawPremiumSceneHeader(ctx, 'モンスター図鑑');
+    drawPremiumPanel(ctx, 12, 68, view.w - 24, 52);
+    drawText(ctx, `発見 ${seen}/${SPECIES.length}`, p ? 34 : 64, 82, { color: '#d8e3f8', font: FONT_SMALL });
+    drawText(ctx, `仲間 ${scouted}/${SPECIES.length}`, view.w - (p ? 34 : 64), 82, {
+      align: 'right', color: '#7fe4b2', font: FONT_SMALL,
     });
-    this.backButton.draw(ctx);
 
     // リストと詳細
     if (p) {
-      const mh = this.menu.draw(ctx, 12, 76, view.w - 24);
-      this.drawDetail(ctx, 12, 76 + mh + 8, view.w - 24, view.h - (76 + mh + 8) - 12);
+      const mh = this.menu.draw(ctx, 12, 132, view.w - 24);
+      this.drawDetail(ctx, 12, 132 + mh + 8, view.w - 24, view.h - (132 + mh + 8) - 12);
     } else {
-      this.menu.draw(ctx, 12, 76, 380);
-      this.drawDetail(ctx, 404, 76, view.w - 416, 520);
+      this.menu.draw(ctx, 12, 132, 380);
+      this.drawDetail(ctx, 404, 132, view.w - 416, view.h - 144);
     }
   }
 
   private drawDetail(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-    drawWindow(ctx, x, y, w, h);
+    drawPremiumPanel(ctx, x, y, w, h);
     const sp: SpeciesDef | undefined = SPECIES[this.menu.cursor];
     if (!sp) return;
     const k = this.knowledge(sp.id);
@@ -127,17 +136,45 @@ export class DexScene implements Scene {
       return;
     }
 
-    // スプライト(シルエット or カラー)
-    const sx = x + 24;
-    const sy = y + 28;
+    // 高精細肖像を優先し、未対応種族のみ正確なパレットのスプライトへ戻す。
+    const portraitSize = p ? 126 : 154;
+    const sx = x + 18;
+    const sy = y + 18;
+    const portraitRect = { x: sx, y: sy, w: portraitSize, h: portraitSize };
     if (k === 'scouted') {
-      drawMonster(ctx, sp.family, sp.palette, sx, sy + bounce, scale);
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(portraitRect.x, portraitRect.y, portraitRect.w, portraitRect.h, 14);
+      ctx.clip();
+      ctx.fillStyle = '#07152f';
+      ctx.fillRect(portraitRect.x, portraitRect.y, portraitRect.w, portraitRect.h);
+      const rendered = drawSpeciesPortrait(ctx, sp, portraitRect);
+      if (!rendered) {
+        const fallbackScale = p ? 7 : 9;
+        const fallbackSize = 16 * fallbackScale;
+        drawMonster(
+          ctx,
+          sp.family,
+          sp.palette,
+          portraitRect.x + (portraitRect.w - fallbackSize) / 2,
+          portraitRect.y + (portraitRect.h - fallbackSize) / 2 + bounce,
+          fallbackScale,
+        );
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(portraitRect.x, portraitRect.y, portraitRect.w, portraitRect.h, 14);
+      ctx.strokeStyle = '#d8ad57';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
     } else {
       const shadow: Record<string, string> = { '1': '#181834', '2': '#181834', '3': '#181834', '#': '#101024', W: '#181834', K: '#101024' };
-      drawGridSprite(ctx, FAMILY_SPRITES[sp.family], shadow, sx, sy + bounce, scale);
+      drawGridSprite(ctx, FAMILY_SPRITES[sp.family], shadow, sx + 18, sy + 18 + bounce, scale);
     }
 
-    const tx = sx + size + 22;
+    const tx = sx + portraitSize + 18;
     drawText(ctx, k === 'scouted' ? sp.name : `${sp.name} (シルエット)`, tx, y + 30, { font: p ? FONT_SMALL : undefined });
     drawText(ctx, `${FAMILY_NAMES[sp.family]}・${'★'.repeat(rankStars(sp.rank))}`, tx, y + (p ? 58 : 66), {
       font: FONT_SMALL,
@@ -149,7 +186,7 @@ export class DexScene implements Scene {
     }
 
     // 下段の描画開始位置
-    let ly = y + size + 44;
+    let ly = y + Math.max(size + 44, portraitSize + 38);
 
     if (k === 'seen') {
       const msg = wrapText(ctx, 'なかまに すれば くわしい じょうほうが わかる!', w - 48, FONT_SMALL);

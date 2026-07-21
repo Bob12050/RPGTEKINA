@@ -39,6 +39,7 @@ import {
 import { MonsterBoxScene } from './box';
 import { DexScene } from './dex';
 import { GachaScene } from './gacha';
+import { MenuScene } from './menu';
 import { QuestHubScene } from './questHub';
 import { ShopScene } from './shop';
 import { StatusScene } from './status';
@@ -253,8 +254,8 @@ export class HomeScene implements Scene {
   }
 
   private openMoreMenu(): void {
-    this.moreMenu.reset();
-    this.phase = 'moreMenu';
+    this.phase = 'main';
+    this.app.scenes.push(new MenuScene(this.app));
   }
 
   private activateMoreMenu(index: number): void {

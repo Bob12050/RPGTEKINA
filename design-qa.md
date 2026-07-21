@@ -237,4 +237,70 @@
 - [P3] Additional species-specific high-definition portraits can be added over time; species without a dedicated portrait already use the correct palette-aware sprite, so they are never shown as a different species.
 - [P3] The implementation keeps a lighter ornament load than the generated target to preserve readability when the box reaches many populated cards.
 
+## Menu hub comparison target
+
+- Source visual truth path: `C:\Users\rei49\.codex\.chatgpt-projects\g-p-6a5e281e094c81919e448bb7dacc7174\RPGTEKINA\design\menu-target.png`
+- Implementation screenshot path: `C:\Users\rei49\.codex\visualizations\2026\07\21\019f8445-c9df-7940-a83a-512428998b84\rpgtekina-menu-build\menu-implementation.png`
+- Viewport: 390 × 844 CSS pixels
+- State: fresh new game, full-screen menu hub, no modal open, touch-default state
+- Full-view comparison evidence: `C:\Users\rei49\.codex\visualizations\2026\07\21\019f8445-c9df-7940-a83a-512428998b84\rpgtekina-menu-build\menu-comparison.png`
+- Focused flow evidence: `menu-item-target.png`, `menu-shop-route.png`, `menu-dex-route.png`, `menu-heal-message.png`, `menu-help-route.png`, `menu-save-message.png`, `menu-landscape.png`, `menu-keyboard-focus.png`, and `menu-dex-landscape.png` in the same evidence directory. Separate captures are required because modal row height, downstream screens, messages, and responsive keyboard behavior are not visible in the main comparison.
+
+## Menu hub findings
+
+- No remaining P0, P1, or P2 findings after independent visual and code re-reviews.
+- The implementation matches the selected hierarchy: gold back/title chrome, resource strip, live adventurer profile, six illustrated utility tiles, and persistent Menu-selected navigation.
+- Shop and Monster Dex now inherit the same opaque starfield, navy/gold panel language, and faceted gold back control instead of exposing the older gray overlay styling.
+
+## Menu hub required fidelity surfaces
+
+- Fonts and typography: Japanese labels, live metrics, badges, and supporting copy preserve the established font stack and hierarchy. Portrait text is unbroken; landscape supporting text was enlarged and reflowed for immediate readability.
+- Spacing and layout rhythm: the 480 × 1040 portrait canvas holds a 2 × 3 tile grid and fixed navigation without clipping. The 960 × 624 landscape canvas uses a 3 × 2 grid, while the Dex list and detail panels remain fully inside the viewport.
+- Colors and visual tokens: midnight navy, antique gold, cyan selected chrome, and emerald heal emphasis match the generated target and the previously redesigned Home, Quest, Gacha, and Monster screens.
+- Image quality and asset fidelity: the background plus six utility illustrations are dedicated high-resolution raster assets with transparent WebP delivery copies. Runtime alpha-bound cropping prevents source padding from shrinking the visible subjects; no emoji, placeholder boxes, or approximate CSS drawings are used.
+- Copy and content: `メニュー`, profile values, `もちもの`, `ショップ`, `全回復`, `モンスター図鑑`, `ヘルプ`, `セーブ`, badges, and the five navigation labels are present and use live game state where applicable.
+
+## Menu hub comparison history
+
+1. Initial implementation review
+   - [P2] Utility tiles still used generic vector icons instead of dedicated premium illustrations.
+   - [P2] Item, target, Shop, and Dex rows were below the approximately 44 CSS-pixel touch baseline.
+   - [P2] Shop and Dex retained old translucent styling and double-header behavior.
+   - [P2] Landscape secondary labels rendered at approximately 7–9 CSS pixels.
+2. First fixes
+   - Generated and installed six transparent utility illustrations, introduced alpha-bound source crops, increased functional list rows to 56 logical pixels, and made Shop/Dex opaque.
+   - Removed duplicate headers and increased landscape copy.
+3. Independent re-review
+   - [P2] Shop/Dex still exposed gray back controls and flat purple-gray panels.
+   - [P2] Landscape supporting copy still needed stronger immediate readability.
+   - [P2] Keyboard tile navigation remained two-column while landscape renders three columns.
+   - [P2] The ten-row landscape Dex list extended 40 logical pixels below the viewport.
+4. Final fixes and re-review
+   - Added shared faceted-gold scene chrome and premium navy/gold panels to Shop and Dex.
+   - Enlarged/reflowed landscape supporting copy, made keyboard movement responsive to two or three columns, and reduced the landscape Dex list to eight fully visible rows.
+   - Independent visual and code re-reviews found no remaining P0/P1/P2 issues.
+
+## Menu hub primary interactions tested
+
+- Home and all redesigned tab bars → full-screen Menu
+- Items → recovery-item selection → party target selection → result message
+- Shop → item list, purchase message, and explicit back control
+- Full Heal → party and Box recovery message
+- Monster Dex → discovery list, high-resolution portrait detail, portrait and landscape layouts, and explicit back control
+- Help and Save flows
+- Bottom navigation to Home, Quest, Gacha, Monster, and Menu
+- Portrait two-column and landscape three-column keyboard movement; right then down selects Help in the verified landscape state
+- Browser console checked after final interaction pass: 0 errors
+
+## Menu hub implementation checklist
+
+- [x] Generated target, dedicated background, and six transparent utility illustrations placed
+- [x] Six functional utility tiles and live state badges wired
+- [x] Shop and Monster Dex upgraded to shared premium chrome
+- [x] Portrait and landscape layouts implemented and visually verified
+- [x] Production build passed
+- [x] 93 automated tests passed
+- [x] Same-size reference/implementation comparison completed
+- [x] Independent visual and code QA passed
+
 final result: passed
