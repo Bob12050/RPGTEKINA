@@ -5,7 +5,7 @@ import type { GameKey } from '../core/input';
 
 /**
  * 現在の画面(キャンバス内部)サイズ。
- * 横持ち: 960x624 / 縦持ち: 480x800 に main.ts が切り替える。
+ * 横持ち: 960x624 / 縦持ち: 480x1040 に main.ts が切り替える。
  * シーンは毎フレーム view.w / view.h を参照してレイアウトする。
  */
 export const view = { w: 960, h: 624 };
@@ -13,7 +13,7 @@ export const view = { w: 960, h: 624 };
 export const LANDSCAPE_W = 960;
 export const LANDSCAPE_H = 624;
 export const PORTRAIT_W = 480;
-export const PORTRAIT_H = 800;
+export const PORTRAIT_H = 1040;
 
 export function isPortrait(): boolean {
   return view.h > view.w;

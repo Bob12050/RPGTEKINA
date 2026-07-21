@@ -19,19 +19,25 @@ function boot(): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('2Dコンテキストを取得できません');
 
-  // 画面の向きに合わせて内部解像度を切り替える(回転してもゲーム続行OK)
+  // 論理解像度と描画解像度を分離し、文字・高解像度素材をDPR対応で描く。
+  let renderScale = 1;
   const applySize = () => {
     const portrait = window.innerHeight > window.innerWidth;
     const w = portrait ? PORTRAIT_W : LANDSCAPE_W;
     const h = portrait ? PORTRAIT_H : LANDSCAPE_H;
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
+    renderScale = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const renderW = Math.round(w * renderScale);
+    const renderH = Math.round(h * renderScale);
+    if (canvas.width !== renderW || canvas.height !== renderH) {
+      canvas.width = renderW;
+      canvas.height = renderH;
     }
     canvas.style.aspectRatio = `${w} / ${h}`;
     view.w = w;
     view.h = h;
-    ctx.imageSmoothingEnabled = false; // リサイズでリセットされるため再設定
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
   };
   applySize();
   window.addEventListener('resize', applySize);
@@ -45,8 +51,8 @@ function boot(): void {
     e.preventDefault();
     const r = canvas.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
-    const x = ((e.clientX - r.left) / r.width) * canvas.width;
-    const y = ((e.clientY - r.top) / r.height) * canvas.height;
+    const x = ((e.clientX - r.left) / r.width) * view.w;
+    const y = ((e.clientY - r.top) / r.height) * view.h;
     input.pushTap(x, y);
   });
 
@@ -62,6 +68,7 @@ function boot(): void {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     scenes.update(dt);
+    ctx!.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     ctx!.clearRect(0, 0, view.w, view.h);
     scenes.draw(ctx!);
     requestAnimationFrame(frame);
