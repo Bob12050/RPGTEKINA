@@ -175,4 +175,66 @@
 - [P3] The exact-species badges intentionally retain the original pixel-art identity while the primary portraits use the new high-definition family style.
 - [P3] The reference uses more engraved metalwork and flare detail on the ten-pull button; the implementation keeps the same hierarchy with a lighter ornament load.
 
+## Monster management comparison target
+
+- Source visual truth path: `C:\Users\rei49\.codex\.chatgpt-projects\g-p-6a5e281e094c81919e448bb7dacc7174\RPGTEKINA\design\monster-box-target.png`
+- Implementation screenshot path: `C:\Users\rei49\.codex\visualizations\2026\07\21\019f8445-c9df-7940-a83a-512428998b84\rpgtekina-monster-build\monster-final-v2.png`
+- Viewport: 390 × 844 CSS pixels
+- State: fresh new game, party tab, no modal open, touch-default state
+- Full-view comparison evidence: `C:\Users\rei49\.codex\visualizations\2026\07\21\019f8445-c9df-7940-a83a-512428998b84\rpgtekina-monster-build\comparison-final.png`
+- Flow evidence: `monster-selected-v2.png`, `monster-box-tab.png`, `monster-sort-overlay.png`, `monster-filter-overlay.png`, `monster-status-v2.png`, `monster-rabbit-status.png`, and `monster-landscape.png` in the same evidence directory.
+
+## Monster management findings
+
+- No remaining P0, P1, or P2 findings after the independent post-fix visual review.
+- The implementation preserves the selected hierarchy: gold back/title chrome, shared resource strip, working Party/Box tabs, party-power and luck summary, four formation slots, portrait roster, sorting/filtering controls, fixed selection actions, and persistent Monster-selected navigation.
+- Party changes now support a direct full-party replacement flow instead of forcing a separate remove-then-add sequence.
+
+## Monster management comparison history
+
+1. Initial implementation
+   - Evidence: `comparison-1.png`, `monster-final.png`, `monster-status-final.png`, and `monster-landscape.png`.
+   - [P1] `rabbit` was incorrectly represented by the generic beast-family wolf portrait, making species identification unreliable.
+   - [P2] Party portraits were too small and dark relative to the target.
+   - [P2] Card labels and detail-page supporting text were too small at the 390px viewport.
+   - [P2] Tabs, sort/filter controls, and selected-monster actions appeared below the 44px touch-target baseline.
+2. Fixes applied
+   - Generated and installed a dedicated `rabbit` portrait and introduced species-ID portrait routing. Species without a matching dedicated image now fall back to the exact palette-aware game sprite instead of an incorrect family portrait.
+   - Enlarged portrait crops by more than 20%, reduced the lower fade, and increased card-name, level, luck, skill, and profile typography.
+   - Enlarged Party/Box tabs, roster controls, modal options, and selection actions to approximately 44–46 CSS pixels at the verified mobile viewport.
+3. Post-fix comparison
+   - Evidence: `comparison-final.png`, `monster-final-v2.png`, `monster-selected-v2.png`, `monster-status-v2.png`, and `monster-rabbit-status.png`.
+   - Independent re-review result: P0/P1/P2 none; passed.
+
+## Monster management primary interactions tested
+
+- Home Monster tab → monster management screen
+- Party and Box tabs
+- Recommended/rank/level/luck sorting modal
+- All/party/box filtering modal
+- Monster selection and fixed `ボックスへ` / `編成する` / `詳細` actions
+- Party-to-box and box-to-party round trip with UID and growth state preserved
+- Full-party replacement logic covered by automated tests
+- Explicit header and footer back controls on the detail screen; arbitrary content taps no longer close it
+- Bottom navigation and responsive portrait/landscape layouts
+- Browser console checked after the final interaction pass: 0 errors
+
+## Monster management implementation checklist
+
+- [x] Exact visual target and dedicated monster-management background placed
+- [x] Dedicated starter-rabbit portrait placed; safe exact-species fallback implemented
+- [x] Party/Box tabs, sort, filter, paging, selection, details, and direct replacement implemented
+- [x] Movement safety rules retained: final-member, farm-capacity, party-capacity, and viable-fighter checks
+- [x] Portrait and landscape layouts implemented
+- [x] Production build passed
+- [x] 93 automated tests passed, including new party-management tests
+- [x] Same-size reference/implementation comparison completed
+- [x] Independent visual QA passed
+
+## Monster management follow-up polish
+
+- [P3] The capacity display intentionally uses the actual combined maximum of Party 4 + Box 50 (`54`), while the generated target used the shorthand `50`.
+- [P3] Additional species-specific high-definition portraits can be added over time; species without a dedicated portrait already use the correct palette-aware sprite, so they are never shown as a different species.
+- [P3] The implementation keeps a lighter ornament load than the generated target to preserve readability when the box reaches many populated cards.
+
 final result: passed
