@@ -82,6 +82,33 @@ export function drawPremiumPanel(
   ctx.restore();
 }
 
+/** 戦闘画面用の、焦茶と古金でまとめたマットなパネル。 */
+export function drawBattlePanel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  light = false,
+): void {
+  ctx.save();
+  ctx.shadowColor = 'rgba(44,31,21,0.26)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+  roundRect(ctx, x, y, w, h, 12);
+  ctx.fillStyle = light ? 'rgba(244,231,207,0.96)' : 'rgba(50,42,34,0.97)';
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = light ? 'rgba(156,126,82,0.78)' : 'rgba(185,151,101,0.72)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  roundRect(ctx, x + 5, y + 5, w - 10, h - 10, 8);
+  ctx.strokeStyle = light ? 'rgba(255,252,242,0.72)' : 'rgba(236,218,184,0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -305,11 +332,11 @@ export class Menu {
   scroll = 0;
   visibleCount: number;
   rowHeight: number;
-  theme: 'default' | 'premium';
+  theme: 'default' | 'premium' | 'battleWarm';
   /** 直近の draw で描いた行のタップ判定領域 */
   private itemRects: { index: number; rect: Rect }[] = [];
 
-  constructor(items: MenuItem[], visibleCount = 8, rowHeight = 44, theme: 'default' | 'premium' = 'default') {
+  constructor(items: MenuItem[], visibleCount = 8, rowHeight = 44, theme: 'default' | 'premium' | 'battleWarm' = 'default') {
     this.items = items;
     this.visibleCount = visibleCount;
     this.rowHeight = rowHeight;
@@ -388,8 +415,14 @@ export class Menu {
     const count = Math.min(this.items.length, this.visibleCount);
     const h = pad * 2 + titleH + Math.max(count, 1) * lineH;
     if (this.theme === 'premium') drawPremiumPanel(ctx, x, y, w, h);
+    else if (this.theme === 'battleWarm') drawBattlePanel(ctx, x, y, w, h);
     else drawWindow(ctx, x, y, w, h);
-    if (title) drawText(ctx, title, x + pad + 8, y + pad - 2, { color: '#ffd94a', font: FONT_SMALL });
+    if (title) {
+      drawText(ctx, title, x + pad + 8, y + pad - 2, {
+        color: this.theme === 'battleWarm' ? '#f0e3cf' : '#ffd94a',
+        font: FONT_SMALL,
+      });
+    }
     const end = Math.min(this.items.length, this.scroll + this.visibleCount);
     this.itemRects = [];
     for (let i = this.scroll; i < end; i++) {
@@ -404,21 +437,33 @@ export class Menu {
       ctx.fillStyle = item.disabled
         ? 'rgba(255,255,255,0.03)'
         : i === this.cursor
-          ? this.theme === 'premium' ? 'rgba(110,79,25,0.55)' : 'rgba(255,217,74,0.18)'
-          : this.theme === 'premium' ? 'rgba(8,24,55,0.88)' : 'rgba(255,255,255,0.07)';
+          ? this.theme === 'premium'
+            ? 'rgba(110,79,25,0.55)'
+            : this.theme === 'battleWarm'
+              ? 'rgba(103,58,50,0.88)'
+              : 'rgba(255,217,74,0.18)'
+          : this.theme === 'premium'
+            ? 'rgba(8,24,55,0.88)'
+            : this.theme === 'battleWarm'
+              ? 'rgba(255,248,235,0.055)'
+              : 'rgba(255,255,255,0.07)';
       ctx.fill();
       if (i === this.cursor && !item.disabled) {
-        ctx.strokeStyle = '#ffd94a';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = this.theme === 'battleWarm' ? '#c98a65' : '#ffd94a';
+        ctx.lineWidth = this.theme === 'battleWarm' ? 1.5 : 2;
         roundRect(ctx, rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, 7);
         ctx.stroke();
+        if (this.theme === 'battleWarm') {
+          ctx.fillStyle = '#d6a45d';
+          ctx.fillRect(rect.x + 14, rect.y + rect.h - 4, Math.max(38, rect.w * 0.23), 2);
+        }
       } else if (this.theme === 'premium' && !item.disabled) {
         ctx.strokeStyle = 'rgba(217,173,85,0.18)';
         ctx.lineWidth = 1;
         ctx.stroke();
       }
       ctx.restore();
-      const color = item.disabled ? '#777788' : '#ffffff';
+      const color = item.disabled ? '#888078' : this.theme === 'battleWarm' ? '#f0e3cf' : '#ffffff';
       const labelY = ly + Math.max(8, (lineH - 28) / 2);
       drawText(ctx, item.label, rect.x + 14, labelY, { color });
       if (item.note) drawText(ctx, item.note, rect.x + rect.w - 12, labelY + 2, { color, align: 'right', font: FONT_SMALL });
@@ -437,6 +482,8 @@ export class MessageBox {
   private shown = 0; // 表示済み文字数
   private speed = 80; // 文字/秒
   done = true;
+
+  constructor(private theme: 'default' | 'battleWarm' = 'default') {}
 
   setPages(pages: string[]): void {
     this.pages = pages.filter((p) => p.length > 0);
@@ -474,15 +521,23 @@ export class MessageBox {
 
   draw(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
     if (this.done) return; // 全ページ表示し終えたら何も描かない
-    drawWindow(ctx, x, y, w, h);
+    if (this.theme === 'battleWarm') drawBattlePanel(ctx, x, y, w, h);
+    else drawWindow(ctx, x, y, w, h);
     const page = this.pages[Math.min(this.pageIndex, this.pages.length - 1)];
     if (!page) return;
     const visible = page.slice(0, Math.floor(this.shown));
     const lines = wrapText(ctx, visible, w - 60);
-    lines.forEach((line, i) => drawText(ctx, line, x + 26, y + 22 + i * 30));
+    lines.forEach((line, i) =>
+      drawText(ctx, line, x + 26, y + 22 + i * 30, {
+        color: this.theme === 'battleWarm' ? '#f0e3cf' : '#ffffff',
+      }),
+    );
     // ページ送りの ▼ 点滅
     if (this.currentPageComplete && !this.done && (Date.now() % 800) < 500) {
-      drawText(ctx, '▼', x + w / 2, y + h - 26, { align: 'center' });
+      drawText(ctx, '▼', x + w / 2, y + h - 26, {
+        align: 'center',
+        color: this.theme === 'battleWarm' ? '#d6a45d' : '#ffffff',
+      });
     }
   }
 }

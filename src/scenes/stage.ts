@@ -41,6 +41,7 @@ export class StageScene implements Scene {
     this.app.scenes.push(
       new BattleScene(this.app, [enemies], {
         bossFinalWave: stage.boss ?? false,
+        stageName: stage.name,
         onComplete: (r) => this.onBattleDone(r),
       }),
     );

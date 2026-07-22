@@ -2,6 +2,16 @@
 // バトルシーン(UI)
 // バトルエンジン(game/battle.ts)が生成するイベント列を演出付きで再生する。
 // ============================================================
+import {
+  faArrowLeft,
+  faBagShopping,
+  faCaretDown,
+  faFlag,
+  faHandFist,
+  faShieldHalved,
+  faWandSparkles,
+} from '@fortawesome/free-solid-svg-icons';
+import type { IconDefinition } from '@fortawesome/free-solid-svg-icons';
 import { requireState, type App } from '../core/app';
 import type { Scene } from '../core/scene';
 import { getItem } from '../data/items';
@@ -18,12 +28,13 @@ import {
 import { gainExp } from '../game/monster';
 import { consumeItem, markSeen } from '../game/state';
 import { drawFancyBg } from '../ui/bg';
+import { drawIcon } from '../ui/icon';
+import { createImageAsset, drawCoverImage, imageReady } from '../ui/media';
 import { drawMonster } from '../ui/sprites';
 import {
   Button,
-  drawGauge,
+  drawBattlePanel,
   drawText,
-  drawWindow,
   FONT_SMALL,
   hpColor,
   inRect,
@@ -36,10 +47,28 @@ import {
 
 /** 最終ボス。撃破で世界に平和が訪れる(専用演出) */
 const FINAL_BOSS_ID = 'tekina';
+const ROYAL_PLAZA = createImageAsset(new URL('../assets/battle/royal-plaza.webp', import.meta.url).href);
+
+const BATTLE_COLORS = {
+  parchment: '#f2e1c7',
+  parchmentDeep: '#e8d5b8',
+  ink: '#4c3926',
+  brass: '#ae8f67',
+  accent: '#daa75d',
+  deck: '#332a22',
+  deckSoft: '#3b3229',
+  selected: '#673a32',
+  selectedBorder: '#c37b5c',
+  cream: '#f0e3cf',
+  hp: '#77b95d',
+  mp: '#4d8fcf',
+} as const;
 
 export interface BattleOptions {
   /** 最後のWAVEがボス(演出強化・そのWAVE中は逃走不可) */
   bossFinalWave?: boolean;
+  /** ヘッダーに表示するクエスト名 */
+  stageName?: string;
   /** 戦闘終了時に結果を返す(ステージ進行の制御に使う) */
   onComplete: (result: BattleResult) => void;
 }
@@ -62,14 +91,45 @@ type TargetContext =
 
 /** 画面下部の操作エリア(メッセージ/コマンドボタン共用)の位置 */
 function msgRect(): Rect {
-  const m = isPortrait() ? 8 : 16;
-  const h = isPortrait() ? 112 : 124;
+  const m = isPortrait() ? 14 : 16;
+  const h = isPortrait() ? 220 : 136;
   return { x: m, y: view.h - h - m, w: view.w - m * 2, h };
 }
 
-/** コマンドボタンの配色 */
-const CMD_COLORS = ['#a8402e', '#2c6a4f', '#555568'] as const; // たたかう/どうぐ/リタイア
-const ACT_COLORS = ['#a8402e', '#7a3ad6', '#2c4a80'] as const; // こうげき/とくぎ/ぼうぎょ
+function fillRounded(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  radius: number,
+  fill: string,
+  stroke?: string,
+  lineWidth = 1,
+): void {
+  ctx.beginPath();
+  ctx.roundRect(rect.x, rect.y, rect.w, rect.h, radius);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+}
+
+function drawMatteGauge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  ratio: number,
+  color: string,
+  lightTrack = false,
+): void {
+  const value = Math.max(0, Math.min(1, ratio));
+  fillRounded(ctx, { x, y, w, h }, h / 2, lightTrack ? 'rgba(76,57,38,0.22)' : 'rgba(24,20,17,0.68)');
+  const fillW = Math.max(0, (w - 2) * value);
+  if (fillW > 1) fillRounded(ctx, { x: x + 1, y: y + 1, w: fillW, h: h - 2 }, (h - 2) / 2, color);
+}
 
 export class BattleScene implements Scene {
   private battle: Battle;
@@ -82,10 +142,10 @@ export class BattleScene implements Scene {
   private actButtons = [new Button(), new Button(), new Button()]; // こうげき/とくぎ/ぼうぎょ
   private retireButtons = [new Button(), new Button()]; // やめとく/リタイアする
   private backButton = new Button();
-  private skillMenu = new Menu([]);
-  private itemMenu = new Menu([]);
-  private allyMenu = new Menu([]);
-  private messages = new MessageBox();
+  private skillMenu = new Menu([], 6, 52, 'battleWarm');
+  private itemMenu = new Menu([], 6, 52, 'battleWarm');
+  private allyMenu = new Menu([], 4, 52, 'battleWarm');
+  private messages = new MessageBox('battleWarm');
   private eventQueue: BattleEvent[] = [];
   private waitingMessage = false;
   private pendingActions = new Map<string, AllyAction>();
@@ -98,6 +158,7 @@ export class BattleScene implements Scene {
   /** ダメージ/回復の数字ポップ */
   private floaters: { text: string; color: string; x: number; y: number; t: number }[] = [];
   private time = 0;
+  private stageName: string;
 
   constructor(
     private app: App,
@@ -105,6 +166,7 @@ export class BattleScene implements Scene {
     opts: BattleOptions,
   ) {
     this.onComplete = opts.onComplete;
+    this.stageName = opts.stageName ?? 'モンスターとの たたかい';
     const state = requireState(app);
     this.battle = new Battle(state.party, waves, opts.bossFinalWave ?? false);
     state.battleCount += 1;
@@ -427,7 +489,7 @@ export class BattleScene implements Scene {
         x = pos.x + (16 * scale) / 2;
         y = pos.y + 24;
       } else {
-        y = (isPortrait() ? 390 : 330) - 90; // 倒れた直後などはだいたいの位置
+        y = (isPortrait() ? 500 : 330) - 90; // 倒れた直後などはだいたいの位置
       }
     } else {
       const idx = this.battle.allies.findIndex((a) => a.id === unitId);
@@ -440,7 +502,7 @@ export class BattleScene implements Scene {
     const heal = delta > 0;
     this.floaters.push({
       text: heal ? `+${delta}` : `${delta}`,
-      color: heal ? '#7dff9c' : unit.side === 'enemy' ? '#ffd94a' : '#ff7a5a',
+      color: heal ? '#73b56d' : unit.side === 'enemy' ? '#9e4438' : '#c75f4f',
       x: x + (this.floaters.length % 3) * 10 - 10, // 連続ヒットで少しずらす
       y,
       t: 0,
@@ -593,97 +655,46 @@ export class BattleScene implements Scene {
   // ==================== 描画 ====================
 
   draw(ctx: CanvasRenderingContext2D): void {
-    // 背景(ボスWAVEでは赤黒く染まる)
-    drawFancyBg(ctx, this.battle.isBossWave() ? 'battleBoss' : 'battle', this.time);
-    // 地面
-    const groundY = isPortrait() ? 390 : 330;
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.beginPath();
-    ctx.ellipse(view.w / 2, groundY, Math.min(380, view.w * 0.44), 70, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // WAVE表示(連戦またはボス戦のとき)
-    if (this.battle.waveCount > 1 || this.battle.isBossWave()) {
-      const label = this.battle.isBossWave() ? 'BOSS' : `WAVE ${this.battle.waveIndex + 1}/${this.battle.waveCount}`;
-      drawText(ctx, label, view.w - 14, 10, {
-        align: 'right',
-        font: FONT_SMALL,
-        color: this.battle.isBossWave() ? '#f0823d' : 'rgba(255,255,255,0.75)',
-      });
-    }
-
+    this.drawBackdrop(ctx);
+    this.drawBattleHeader(ctx);
     this.drawEnemies(ctx);
     this.drawAllyPanels(ctx);
     this.drawFloaters(ctx);
 
-    // ---- 下部の操作エリア(大きなタップボタン) ----
     const p = isPortrait();
     const area = msgRect();
-    const gap = 8;
 
     if (this.phase === 'command') {
-      const bw = Math.floor((area.w - gap * 2) / 3);
-      const labels = ['たたかう', 'どうぐ', 'リタイア'];
-      labels.forEach((label, i) => {
-        this.cmdButtons[i]!.draw(ctx, area.x + i * (bw + gap), area.y, bw, area.h, label, {
-          color: CMD_COLORS[i],
-          selected: i === this.cmdCursor,
-        });
-      });
+      this.drawCommandDeck(ctx, area);
     }
 
     if (this.phase === 'retireConfirm') {
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(0, 0, view.w, view.h);
-      const mw = Math.min(420, view.w - 24);
-      const mx = (view.w - mw) / 2;
-      const my = view.h / 2 - 130;
-      drawWindow(ctx, mx, my, mw, 210);
-      drawText(ctx, 'クエストを リタイアする?', mx + mw / 2, my + 26, { align: 'center', color: '#ffd94a' });
-      drawText(ctx, 'ほうしゅうは もらえないよ', mx + mw / 2, my + 62, { align: 'center', font: FONT_SMALL, color: '#ccccee' });
-      const bw = Math.floor((mw - 3 * 14) / 2);
-      this.retireButtons[0]!.draw(ctx, mx + 14, my + 110, bw, 72, 'やめとく', {
-        color: '#2c4a80',
-        selected: this.retireCursor === 0,
-      });
-      this.retireButtons[1]!.draw(ctx, mx + 14 + bw + 14, my + 110, bw, 72, 'リタイアする', {
-        color: '#a8402e',
-        selected: this.retireCursor === 1,
-      });
+      this.drawRetireDialog(ctx);
     }
 
     if (this.phase === 'allyAction') {
-      const ally = this.currentAlly();
-      if (ally) {
-        drawText(ctx, `${ally.name}は どうする?`, view.w / 2, 12, { align: 'center', font: FONT_SMALL, color: '#ffd94a' });
-      }
-      const backW = 84;
-      const bw = Math.floor((area.w - backW - gap * 3) / 3);
-      this.backButton.draw(ctx, area.x, area.y, backW, area.h, '◀', { color: '#3a3a55' });
-      const labels = ['こうげき', 'とくぎ', 'ぼうぎょ'];
-      labels.forEach((label, i) => {
-        this.actButtons[i]!.draw(ctx, area.x + backW + gap + i * (bw + gap), area.y, bw, area.h, label, {
-          color: ACT_COLORS[i],
-          selected: i === this.actCursor,
-          font: FONT_SMALL,
-        });
-      });
+      this.drawAllyActionDeck(ctx, area);
     }
 
     if (this.phase === 'skillPick' || this.phase === 'itemPick') {
       const menu = this.phase === 'skillPick' ? this.skillMenu : this.itemMenu;
-      menu.draw(ctx, p ? 10 : 16, p ? 230 : 130, p ? view.w - 20 : 380, this.phase === 'skillPick' ? 'とくぎを えらぶ' : 'どうぐを えらぶ');
-      this.backButton.draw(ctx, area.x, area.y, 130, area.h, '◀ もどる', { color: '#3a3a55', font: FONT_SMALL });
+      menu.draw(
+        ctx,
+        p ? 14 : 16,
+        p ? 250 : 84,
+        p ? view.w - 28 : 420,
+        this.phase === 'skillPick' ? 'とくぎを えらぶ' : 'どうぐを えらぶ',
+      );
+      this.drawBackDeck(ctx, area, this.phase === 'skillPick' ? 'とくぎを選択中' : 'どうぐを選択中');
     }
 
     if (this.phase === 'targetAlly') {
-      this.allyMenu.draw(ctx, p ? 10 : 16, p ? 250 : 160, p ? view.w - 20 : 400, 'だれに?');
-      this.backButton.draw(ctx, area.x, area.y, 130, area.h, '◀ もどる', { color: '#3a3a55', font: FONT_SMALL });
+      this.allyMenu.draw(ctx, p ? 14 : 16, p ? 310 : 116, p ? view.w - 28 : 420, 'だれに つかう?');
+      this.drawBackDeck(ctx, area, 'なかまを選択中');
     }
 
     if (this.phase === 'targetEnemy') {
-      this.backButton.draw(ctx, area.x, area.y, 130, area.h, '◀ もどる', { color: '#3a3a55', font: FONT_SMALL });
-      drawText(ctx, 'てきを タップ!', area.x + 150, area.y + area.h / 2 - 12, { color: '#ffd94a' });
+      this.drawBackDeck(ctx, area, '攻撃する敵を タップ');
     }
 
     // メッセージ
@@ -693,12 +704,221 @@ export class BattleScene implements Scene {
     }
   }
 
+  private drawBackdrop(ctx: CanvasRenderingContext2D): void {
+    const p = isPortrait();
+    const bgHeight = p ? msgRect().y : view.h;
+    if (imageReady(ROYAL_PLAZA)) {
+      drawCoverImage(ctx, ROYAL_PLAZA, { x: 0, y: 0, w: view.w, h: bgHeight }, 0.5, p ? 0.5 : 0.58);
+      if (this.battle.isBossWave()) {
+        ctx.fillStyle = 'rgba(91,35,31,0.32)';
+        ctx.fillRect(0, 0, view.w, bgHeight);
+      }
+    } else {
+      drawFancyBg(ctx, this.battle.isBossWave() ? 'battleBoss' : 'battle', this.time);
+    }
+    if (p && bgHeight < view.h) {
+      ctx.fillStyle = BATTLE_COLORS.deck;
+      ctx.fillRect(0, bgHeight, view.w, view.h - bgHeight);
+    }
+  }
+
+  private drawBattleHeader(ctx: CanvasRenderingContext2D): void {
+    const p = isPortrait();
+    const h = p ? 68 : 54;
+    ctx.fillStyle = 'rgba(246,235,214,0.96)';
+    ctx.fillRect(0, 0, view.w, h);
+    ctx.fillStyle = BATTLE_COLORS.brass;
+    ctx.fillRect(0, h - 2, view.w, 2);
+    const iconSize = p ? 24 : 20;
+    drawIcon(ctx, faShieldHalved, p ? 18 : 24, (h - iconSize) / 2, iconSize, BATTLE_COLORS.ink);
+    drawText(ctx, this.stageName, p ? 54 : 56, p ? 21 : 16, {
+      color: BATTLE_COLORS.ink,
+      font: `bold ${p ? 20 : 18}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+    });
+    const wave = this.battle.isBossWave()
+      ? 'BOSS WAVE'
+      : `WAVE ${this.battle.waveIndex + 1}/${this.battle.waveCount}`;
+    drawText(ctx, wave, view.w - (p ? 20 : 28), p ? 23 : 17, {
+      align: 'right',
+      color: this.battle.isBossWave() ? '#8d3f34' : BATTLE_COLORS.ink,
+      font: `bold ${p ? 16 : 15}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+    });
+  }
+
+  private drawBattleButton(
+    ctx: CanvasRenderingContext2D,
+    button: Button,
+    rect: Rect,
+    label: string,
+    icon: IconDefinition,
+    selected: boolean,
+    primary = false,
+  ): void {
+    button.rect = rect;
+    ctx.save();
+    ctx.shadowColor = 'rgba(20,14,10,0.32)';
+    ctx.shadowBlur = selected ? 10 : 5;
+    ctx.shadowOffsetY = 3;
+    fillRounded(
+      ctx,
+      rect,
+      11,
+      selected || primary ? BATTLE_COLORS.selected : BATTLE_COLORS.deckSoft,
+      selected ? BATTLE_COLORS.selectedBorder : 'rgba(235,220,192,0.18)',
+      selected ? 2 : 1,
+    );
+    ctx.shadowColor = 'transparent';
+    const iconSize = rect.h >= 120 ? Math.min(42, rect.w * 0.28) : Math.min(28, rect.w * 0.22);
+    const iconY = rect.h >= 120 ? rect.y + rect.h * 0.22 : rect.y + 18;
+    drawIcon(ctx, icon, rect.x + (rect.w - iconSize) / 2, iconY, iconSize, selected ? '#f7e7ca' : '#d8c7aa');
+    drawText(ctx, label, rect.x + rect.w / 2, rect.y + (rect.h >= 120 ? rect.h * 0.61 : rect.h - 38), {
+      align: 'center',
+      color: BATTLE_COLORS.cream,
+      font: `bold ${rect.w < 90 ? 14 : primary ? 21 : 18}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+    });
+    if (selected) {
+      const lineW = Math.min(rect.w - 32, Math.max(40, rect.w * 0.55));
+      ctx.fillStyle = BATTLE_COLORS.accent;
+      ctx.fillRect(rect.x + (rect.w - lineW) / 2, rect.y + rect.h - 12, lineW, 2);
+    }
+    ctx.restore();
+  }
+
+  private drawCommandDeck(ctx: CanvasRenderingContext2D, area: Rect): void {
+    drawBattlePanel(ctx, area.x, area.y, area.w, area.h);
+    const pad = 12;
+    const gap = 9;
+    const innerH = area.h - pad * 2;
+    if (isPortrait()) {
+      const primaryW = Math.round((area.w - pad * 2) * 0.42);
+      const otherW = Math.floor((area.w - pad * 2 - primaryW - gap * 2) / 2);
+      const rects: Rect[] = [
+        { x: area.x + pad, y: area.y + pad, w: primaryW, h: innerH },
+        { x: area.x + pad + primaryW + gap, y: area.y + pad, w: otherW, h: innerH },
+        { x: area.x + pad + primaryW + gap * 2 + otherW, y: area.y + pad, w: otherW, h: innerH },
+      ];
+      const items: [string, IconDefinition][] = [
+        ['たたかう', faHandFist],
+        ['どうぐ', faBagShopping],
+        ['リタイア', faFlag],
+      ];
+      items.forEach(([label, icon], i) =>
+        this.drawBattleButton(ctx, this.cmdButtons[i]!, rects[i]!, label, icon, i === this.cmdCursor, i === 0),
+      );
+      return;
+    }
+    const bw = Math.floor((area.w - pad * 2 - gap * 2) / 3);
+    const items: [string, IconDefinition][] = [
+      ['たたかう', faHandFist],
+      ['どうぐ', faBagShopping],
+      ['リタイア', faFlag],
+    ];
+    items.forEach(([label, icon], i) => {
+      const rect = { x: area.x + pad + i * (bw + gap), y: area.y + pad, w: bw, h: innerH };
+      this.drawBattleButton(ctx, this.cmdButtons[i]!, rect, label, icon, i === this.cmdCursor, i === 0);
+    });
+  }
+
+  private drawAllyActionDeck(ctx: CanvasRenderingContext2D, area: Rect): void {
+    drawBattlePanel(ctx, area.x, area.y, area.w, area.h);
+    const ally = this.currentAlly();
+    if (ally) {
+      drawText(ctx, `${ally.name}は どうする?`, area.x + 18, area.y + 14, {
+        color: BATTLE_COLORS.cream,
+        font: `bold 17px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+      });
+    }
+    const gap = 8;
+    const y = area.y + 46;
+    const h = area.h - 58;
+    const backW = isPortrait() ? 76 : 92;
+    const bw = Math.floor((area.w - 24 - backW - gap * 3) / 3);
+    this.drawBattleButton(
+      ctx,
+      this.backButton,
+      { x: area.x + 12, y, w: backW, h },
+      '戻る',
+      faArrowLeft,
+      false,
+    );
+    const items: [string, IconDefinition][] = [
+      ['こうげき', faHandFist],
+      ['とくぎ', faWandSparkles],
+      ['ぼうぎょ', faShieldHalved],
+    ];
+    items.forEach(([label, icon], i) => {
+      const rect = { x: area.x + 12 + backW + gap + i * (bw + gap), y, w: bw, h };
+      this.drawBattleButton(ctx, this.actButtons[i]!, rect, label, icon, i === this.actCursor, i === 0);
+    });
+  }
+
+  private drawBackDeck(ctx: CanvasRenderingContext2D, area: Rect, note: string): void {
+    drawBattlePanel(ctx, area.x, area.y, area.w, area.h);
+    const pad = 12;
+    const backW = isPortrait() ? 132 : 160;
+    this.drawBattleButton(
+      ctx,
+      this.backButton,
+      { x: area.x + pad, y: area.y + pad, w: backW, h: area.h - pad * 2 },
+      '戻る',
+      faArrowLeft,
+      false,
+    );
+    drawText(ctx, note, area.x + backW + 34, area.y + area.h / 2 - 12, {
+      color: BATTLE_COLORS.cream,
+      font: `bold ${isPortrait() ? 17 : 18}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+    });
+  }
+
+  private drawRetireDialog(ctx: CanvasRenderingContext2D): void {
+    ctx.fillStyle = 'rgba(38,27,20,0.58)';
+    ctx.fillRect(0, 0, view.w, view.h);
+    const mw = Math.min(430, view.w - 28);
+    const mx = (view.w - mw) / 2;
+    const my = view.h / 2 - 128;
+    const mh = 236;
+    drawBattlePanel(ctx, mx, my, mw, mh);
+    drawText(ctx, 'クエストを リタイアする?', mx + mw / 2, my + 30, {
+      align: 'center',
+      color: BATTLE_COLORS.cream,
+      font: `bold 20px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+    });
+    drawText(ctx, '報酬は受け取れません', mx + mw / 2, my + 68, {
+      align: 'center',
+      font: FONT_SMALL,
+      color: '#cbbda8',
+    });
+    const gap = 12;
+    const bw = Math.floor((mw - 40 - gap) / 2);
+    const by = my + 112;
+    this.drawBattleButton(
+      ctx,
+      this.retireButtons[0]!,
+      { x: mx + 20, y: by, w: bw, h: 98 },
+      'やめとく',
+      faArrowLeft,
+      this.retireCursor === 0,
+    );
+    this.drawBattleButton(
+      ctx,
+      this.retireButtons[1]!,
+      { x: mx + 20 + bw + gap, y: by, w: bw, h: 98 },
+      'リタイア',
+      faFlag,
+      this.retireCursor === 1,
+      true,
+    );
+  }
+
   private enemyPositions(): { unit: BattleUnit; x: number; y: number }[] {
     const alive = this.battle.aliveEnemies();
     const scale = this.battle.isBossWave() ? 9 : 6;
     const size = 16 * scale;
-    const gap = size + (isPortrait() ? 14 : 40);
-    const groundY = isPortrait() ? 390 : 330;
+    const portraitGap = alive.length <= 1
+      ? 0
+      : Math.min(size + 64, (view.w - 48 - size) / (alive.length - 1));
+    const gap = isPortrait() ? portraitGap : size + 40;
+    const groundY = isPortrait() ? 500 : 330;
     return alive.map((unit, i) => ({
       unit,
       x: view.w / 2 + (i - (alive.length - 1) / 2) * gap - size / 2,
@@ -718,14 +938,31 @@ export class BattleScene implements Scene {
       drawMonster(ctx, sp.family, sp.palette, x + dx, y + bounce, scale);
       // 名前とHPゲージ
       const cx = x + (16 * scale) / 2;
-      drawText(ctx, `${unit.name} Lv${unit.level}`, cx, y - 44, { align: 'center', font: FONT_SMALL });
-      drawGauge(ctx, cx - 50, y - 22, 100, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
+      const label = `${unit.name} Lv${unit.level}`;
+      ctx.save();
+      const labelSize = isPortrait() ? 15 : 16;
+      ctx.font = `bold ${labelSize}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`;
+      const labelW = Math.max(106, ctx.measureText(label).width + 24);
+      fillRounded(
+        ctx,
+        { x: cx - labelW / 2, y: y - 50, w: labelW, h: 28 },
+        10,
+        'rgba(55,42,29,0.78)',
+        'rgba(241,224,193,0.42)',
+      );
+      ctx.restore();
+      drawText(ctx, label, cx, y - 45, {
+        align: 'center',
+        color: '#f8f1e4',
+        font: `bold ${labelSize}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+      });
+      drawMatteGauge(ctx, cx - 52, y - 15, 104, 9, unit.hp / unit.stats.hp, BATTLE_COLORS.hp);
       // ターゲットカーソル
       if (this.phase === 'targetEnemy') {
         const idx = targets.findIndex((t) => t.id === unit.id);
         if (idx === Math.min(this.targetIdx, targets.length - 1)) {
           const arrowBounce = Math.sin(this.time * 6) * 4;
-          drawText(ctx, '▼', cx, y - 70 + arrowBounce, { align: 'center', color: '#ffd94a' });
+          drawIcon(ctx, faCaretDown, cx - 10, y - 78 + arrowBounce, 20, BATTLE_COLORS.accent);
         }
       }
     }
@@ -736,18 +973,20 @@ export class BattleScene implements Scene {
     const n = this.battle.allies.length;
     const msg = msgRect();
     if (isPortrait()) {
-      const cols = n <= 2 ? 1 : 2;
+      const cols = n <= 1 ? 1 : 2;
       const rows = Math.ceil(n / cols);
       const gapX = 8;
-      const w = cols === 1 ? view.w - 16 : Math.floor((view.w - 16 - gapX) / 2);
-      const h = 62;
-      const top = msg.y - rows * (h + 6);
-      return { x: 8 + (i % cols) * (w + gapX), y: top + Math.floor(i / cols) * (h + 6), w, h };
+      const side = 14;
+      const w = cols === 1 ? view.w - side * 2 : Math.floor((view.w - side * 2 - gapX) / 2);
+      const h = n <= 2 ? 116 : 78;
+      const gapY = 8;
+      const top = msg.y - rows * h - (rows - 1) * gapY - 10;
+      return { x: side + (i % cols) * (w + gapX), y: top + Math.floor(i / cols) * (h + gapY), w, h };
     }
     const gap = 12;
     const w = Math.floor((view.w - 24 - gap * (n - 1)) / Math.max(1, n));
-    const h = 92;
-    return { x: 12 + i * (w + gap), y: msg.y - h - 6, w, h };
+    const h = 96;
+    return { x: 12 + i * (w + gap), y: msg.y - h - 10, w, h };
   }
 
   private drawAllyPanels(ctx: CanvasRenderingContext2D): void {
@@ -758,32 +997,76 @@ export class BattleScene implements Scene {
     for (let i = 0; i < n; i++) {
       const unit = this.battle.allies[i]!;
       const { x, y, w, h } = this.allyPanelRect(i);
-      drawWindow(ctx, x, y, w, h);
-      // 行動中の味方は金色にハイライト
+      drawBattlePanel(ctx, x, y, w, h, true);
       if (current && current.id === unit.id) {
         ctx.save();
-        ctx.strokeStyle = '#ffd94a';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = BATTLE_COLORS.selectedBorder;
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, 13);
+        ctx.roundRect(x + 2, y + 2, w - 4, h - 4, 10);
         ctx.stroke();
+        ctx.fillStyle = BATTLE_COLORS.accent;
+        ctx.fillRect(x + 18, y + 6, Math.min(78, w * 0.34), 3);
         ctx.restore();
-        drawText(ctx, '▶', x + 2, y + 4, { color: '#ffd94a' });
       }
-      const nameColor = unit.hp <= 0 ? '#f05a3d' : '#ffffff';
-      if (p) {
-        drawText(ctx, unit.name, x + 12, y + 6, { color: nameColor, font: FONT_SMALL });
-        drawText(ctx, `Lv${unit.level}`, x + w - 10, y + 6, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
-        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 12, y + 28, { font: FONT_SMALL });
-        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 10, y + 28, { align: 'right', font: FONT_SMALL, color: '#8fb8f0' });
-        drawGauge(ctx, x + 12, y + 48, w - 24, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
+      const species = getSpecies(unit.speciesId);
+      const nameColor = unit.hp <= 0 ? '#9e4438' : BATTLE_COLORS.ink;
+      if (p && h >= 100) {
+        drawMonster(ctx, species.family, species.palette, x + 14, y + 35, 3);
+        const infoX = x + 74;
+        const gaugeW = Math.max(60, w - (infoX - x) - 14);
+        drawText(ctx, unit.name, infoX, y + 14, {
+          color: nameColor,
+          font: `bold 16px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+        });
+        drawText(ctx, `Lv${unit.level}`, x + w - 12, y + 15, {
+          align: 'right',
+          font: '14px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif',
+          color: '#78654e',
+        });
+        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, infoX, y + 43, { font: FONT_SMALL, color: BATTLE_COLORS.ink });
+        drawMatteGauge(ctx, infoX, y + 64, gaugeW, 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp), true);
+        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, infoX, y + 75, { font: FONT_SMALL, color: '#456f96' });
+        drawMatteGauge(
+          ctx,
+          infoX,
+          y + 96,
+          gaugeW,
+          7,
+          unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp,
+          BATTLE_COLORS.mp,
+          true,
+        );
+      } else if (p) {
+        drawMonster(ctx, species.family, species.palette, x + 10, y + 27, 2);
+        const infoX = x + 48;
+        drawText(ctx, unit.name, infoX, y + 8, {
+          color: nameColor,
+          font: `bold 14px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
+        });
+        drawText(ctx, `Lv${unit.level}`, x + w - 10, y + 8, { align: 'right', font: '12px sans-serif', color: '#78654e' });
+        const half = Math.max(44, (w - infoX + x - 16) / 2);
+        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, infoX, y + 32, { font: '12px sans-serif', color: BATTLE_COLORS.ink });
+        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, infoX + half, y + 32, { font: '12px sans-serif', color: '#456f96' });
+        drawMatteGauge(ctx, infoX, y + 53, half - 8, 7, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp), true);
+        drawMatteGauge(
+          ctx,
+          infoX + half,
+          y + 53,
+          half - 8,
+          7,
+          unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp,
+          BATTLE_COLORS.mp,
+          true,
+        );
       } else {
-        drawText(ctx, `${unit.name}`, x + 14, y + 10, { color: nameColor, font: FONT_SMALL });
-        drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 10, { align: 'right', font: FONT_SMALL, color: '#aaaacc' });
-        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, x + 14, y + 34, { font: FONT_SMALL });
-        drawGauge(ctx, x + 14, y + 56, w - 28, 9, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp));
-        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 14, y + 34, { align: 'right', font: FONT_SMALL, color: '#8fb8f0' });
-        drawGauge(ctx, x + 14, y + 70, w - 28, 7, unit.stats.mp === 0 ? 0 : unit.mp / unit.stats.mp, '#4a8ae8');
+        drawMonster(ctx, species.family, species.palette, x + 12, y + 26, 3);
+        const infoX = x + 72;
+        drawText(ctx, unit.name, infoX, y + 12, { color: nameColor, font: `bold 16px sans-serif` });
+        drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 12, { align: 'right', font: '13px sans-serif', color: '#78654e' });
+        drawText(ctx, `HP ${unit.hp}/${unit.stats.hp}`, infoX, y + 39, { font: '14px sans-serif', color: BATTLE_COLORS.ink });
+        drawMatteGauge(ctx, infoX, y + 61, Math.max(72, w - (infoX - x) - 14), 8, unit.hp / unit.stats.hp, hpColor(unit.hp / unit.stats.hp), true);
+        drawText(ctx, `MP ${unit.mp}/${unit.stats.mp}`, x + w - 14, y + 39, { align: 'right', font: '14px sans-serif', color: '#456f96' });
       }
     }
   }

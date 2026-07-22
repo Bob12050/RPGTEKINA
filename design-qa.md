@@ -304,3 +304,46 @@
 - [x] Independent visual and code QA passed
 
 final result: passed
+
+---
+
+# Battle redesign design QA
+
+## Battle comparison target
+
+- Visual source: `design/mobile-preview/battle-direction-3.png`
+- Source dimensions: 853 × 1844
+- Primary implementation evidence: `design/mobile-preview/battle-implementation-command.png`
+- Focused state evidence: `design/mobile-preview/battle-implementation-skill.png`
+- Landscape evidence: `design/mobile-preview/battle-implementation-landscape.png`
+- Implementation viewport: 480 × 1040 portrait; 960 × 624 landscape
+- Compared state: first normal quest, wave 1/1, command selection with two allies and two enemies
+
+## Battle full-view and focused evidence
+
+- Full portrait command view confirms the four-region structure: parchment header, battlefield, two-card party HUD, and dark command deck.
+- Focused skill view confirms that the skill drawer, selection highlight, MP note, and back action remain readable and tappable.
+- Full landscape view confirms that enemy labels, party cards, and the three command targets fit without clipping or overlap.
+- Manual interaction checks passed for command, ally action, skill list, item list, enemy targeting, back navigation, and retire confirmation.
+
+## Battle fidelity surfaces
+
+1. Composition and layout: header/battle/HUD/command proportions follow direction 3. Existing pixel monsters stay on the generated plaza rather than being replaced by mock artwork.
+2. Typography: Japanese labels use bold rounded/system gothic fallbacks with clear hierarchy; stage, wave, enemy, HP/MP, and commands remain legible at mobile size.
+3. Color and treatment: parchment, dark brown, muted red, antique brass, matte HP green, and restrained MP blue match the selected low-saturation direction.
+4. Imagery and assets: the generated royal-plaza background contains no baked-in UI, text, or characters. Production uses the optimized WebP; Font Awesome supplies control icons.
+5. Interaction and states: all existing battle phases remain reachable and use the new visual language. Portrait and landscape layouts both preserve touch targets.
+
+## Battle comparison history
+
+- Iteration 1: `design/mobile-preview/battle-implementation-iteration-1.png`. P1: the two enemy name pills overlapped in portrait. P2: the combat glyph read as a decorative crest rather than an attack action.
+- Iteration 2: increased adaptive portrait enemy spacing, reduced portrait enemy-label type to 15px, and changed the attack glyph to a familiar fist icon. Recompared against the source at the same portrait aspect ratio; overlap and icon ambiguity were resolved.
+
+## Battle validation
+
+- `npm test`: 9 files, 93 tests passed.
+- `npm run build`: TypeScript and Vite production build passed.
+- Current preview produced no errors or warnings from the RPGTEKINA origin. Older warnings in the browser log belonged to an unrelated localhost page visited before the correct preview URL.
+- Open P0/P1/P2 findings: none.
+
+final result: passed
