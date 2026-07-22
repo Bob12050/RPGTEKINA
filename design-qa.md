@@ -390,3 +390,59 @@ final result: passed
 - Dedicated art is intentionally staged per species; the safe exact-species pixel fallback remains for the rest of the roster until each new asset is added.
 
 final result: passed
+
+---
+
+# Battle character visual QA — stage 2 roster
+
+## Comparison target and evidence
+
+- Source visual truth: `design/mobile-preview/battle-direction-3.png`
+- Source pixels: 853 × 1844 PNG; generated visual target, so no independent CSS viewport or device frame applies.
+- Primary implementation: `design/mobile-preview/battle-character-stage-2-command.png`
+- Focused interaction state: `design/mobile-preview/battle-character-stage-2-target.png`
+- Responsive evidence: `design/mobile-preview/battle-character-stage-2-landscape.png`
+- Same-input comparison: `design/mobile-preview/battle-character-stage-2-comparison.png`
+- Implementation pixels / CSS viewport: 480 × 1040 portrait and 960 × 624 landscape, device scale factor 1.
+- Density normalization: source was proportionally fit into a 480 × 1040 surface with neutral edge padding; the portrait implementation was compared at its native 480 × 1040 pixels.
+- State: normal quest `はなばたけ`, wave 1/1, command selection and enemy-target selection with `マンドラっこ`, `ゴースト`, and `ゴブリン`.
+
+## Findings
+
+- No actionable P0/P1/P2 findings remain.
+- [P3] If a newly registered battle image has not finished loading or fails, its exact-species pixel fallback can briefly inherit the larger high-resolution battlefield slot. Normal loaded rendering, all tested states, and unsupported-species legacy fallback remain correct.
+
+## Full-view comparison evidence
+
+- The combined source/implementation image confirms the selected warm royal-plaza composition, parchment header and HUD, dark-brown command deck, restrained accent colors, and four-region hierarchy remain intact.
+- The implementation intentionally shows the three stage-2 enemies rather than the two stage-1 reference enemies. Their extra density is accommodated without label collision, silhouette overlap, or loss of the arena focal area.
+- The mandrake leaves and goblin club remain fully inside their slots; the ghost is visibly lifted from the ground while retaining a readable contact relationship with the battlefield.
+
+## Focused region and responsive evidence
+
+- `battle-character-stage-2-target.png` verifies the enemy-selection instruction, back control, three distinct target regions, labels, gauges, and silhouettes remain readable at 480 px width.
+- `battle-character-stage-2-landscape.png` verifies all three enemies, two party cards, and all three primary commands fit at 960 × 624 without clipping or overlap.
+- No separate crops were needed because the native portrait and landscape captures keep the smallest labels, gauges, transparent edges, and command icons legible at full-view scale.
+
+## Required fidelity surfaces
+
+1. Fonts and typography: Japanese system-gothic hierarchy is consistent across stage title, enemy labels, HUD data, and commands. Weight, wrapping, truncation, and line spacing remain stable in portrait and landscape.
+2. Spacing and layout rhythm: enemy slots are evenly distributed; labels and gauges have consistent offsets; HUD cards and command targets preserve the selected direction's spacing, borders, radii, and elevation.
+3. Colors and visual tokens: cream parchment, dark brown, muted red, antique brass, matte green HP, and restrained blue MP retain the low-to-medium saturation requested by the user.
+4. Image quality and asset fidelity: all three new species use sharp transparent PNG masters and optimized WebP runtime assets. Silhouettes, crops, alpha edges, matte shading, and species identity remain clear in field, HUD, status, box, and encyclopedia portrait usage.
+5. Copy and content: all visible app text is Japanese and species names, levels, action labels, target instructions, HP, and MP are coherent and correctly associated.
+
+## Interaction and browser checks
+
+- Tested the complete stage-1 clear path, full-party recovery, stage-2 unlock and entry, command selection, attack selection, enemy-target state, back navigation, and portrait-to-landscape resizing.
+- Browser console/dev log after the stage-2 checks: no errors or warnings.
+- `npm test`: 9 files, 93 tests passed.
+- `npm run build`: TypeScript and Vite production build passed; new runtime assets emitted at 57.46 kB (`ghost`), 94.91 kB (`mandra`), and 109.22 kB (`goblin`).
+
+## Comparison history
+
+1. Initial stage-2 rollout: the three species still used low-resolution family sprites, creating the remaining character-quality gap against direction 3.
+2. High-resolution pass: generated species-specific transparent masters, produced optimized WebP runtime copies, registered exact species art across battle and portrait surfaces, and added a battlefield-only 8% lift for the floating ghost.
+3. Final same-state comparison: portrait command, portrait target, and landscape command captures were reviewed together with the source. No P0/P1/P2 fix iteration was required after the final capture.
+
+final result: passed

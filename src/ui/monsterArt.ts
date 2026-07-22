@@ -8,10 +8,22 @@ const FAMILY_ATLAS_B = createImageAsset(new URL('../assets/gacha/family-atlas-b.
 const RABBIT_PORTRAIT = createImageAsset(new URL('../assets/monster/rabbit-portrait.webp', import.meta.url).href);
 const PUNI_COMBAT = createImageAsset(new URL('../assets/battle/puni-combat-v1.webp', import.meta.url).href);
 const RABBIT_COMBAT = createImageAsset(new URL('../assets/battle/rabbit-combat-v1.webp', import.meta.url).href);
+const MANDRA_COMBAT = createImageAsset(new URL('../assets/battle/mandra-combat-v1.webp', import.meta.url).href);
+const GHOST_COMBAT = createImageAsset(new URL('../assets/battle/ghost-combat-v1.webp', import.meta.url).href);
+const GOBLIN_COMBAT = createImageAsset(new URL('../assets/battle/goblin-combat-v1.webp', import.meta.url).href);
 
-const BATTLE_SPECIES_ART: Partial<Record<string, HTMLImageElement | null>> = {
-  puni: PUNI_COMBAT,
-  rabbit: RABBIT_COMBAT,
+interface BattleSpeciesArtDef {
+  image: HTMLImageElement | null;
+  /** 地面から浮く種族だけ、戦場の枠高に対する割合で持ち上げる。 */
+  groundLift?: number;
+}
+
+const BATTLE_SPECIES_ART: Partial<Record<string, BattleSpeciesArtDef>> = {
+  puni: { image: PUNI_COMBAT },
+  rabbit: { image: RABBIT_COMBAT },
+  mandra: { image: MANDRA_COMBAT },
+  ghost: { image: GHOST_COMBAT, groundLift: 0.08 },
+  goblin: { image: GOBLIN_COMBAT },
 };
 
 const FAMILY_PORTRAITS: Record<Family, { image: HTMLImageElement | null; column: 0 | 1; row: 0 | 1 }> = {
@@ -60,9 +72,7 @@ export function drawSpeciesPortrait(
   rect: Rect,
   alpha = 1,
 ): boolean {
-  if ((species.id === 'puni' || species.id === 'rabbit') && drawBattleSpeciesArt(ctx, species, rect, alpha)) {
-    return true;
-  }
+  if (drawBattleSpeciesArt(ctx, species, rect, alpha)) return true;
   if (species.id === 'rabbit' && imageReady(RABBIT_PORTRAIT)) {
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -90,7 +100,8 @@ export function drawBattleSpeciesArt(
   flipX = false,
   alignY: 'center' | 'bottom' = 'center',
 ): boolean {
-  const image = BATTLE_SPECIES_ART[species.id] ?? null;
+  const art = BATTLE_SPECIES_ART[species.id];
+  const image = art?.image ?? null;
   if (!imageReady(image)) return false;
 
   ctx.save();
@@ -105,7 +116,10 @@ export function drawBattleSpeciesArt(
   const width = image.naturalWidth * scale;
   const height = image.naturalHeight * scale;
   const drawX = rect.x + (rect.w - width) / 2;
-  const drawY = alignY === 'bottom' ? rect.y + rect.h - height : rect.y + (rect.h - height) / 2;
+  const groundLift = alignY === 'bottom' ? rect.h * (art?.groundLift ?? 0) : 0;
+  const drawY = alignY === 'bottom'
+    ? rect.y + rect.h - height - groundLift
+    : rect.y + (rect.h - height) / 2;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(image, drawX, drawY, width, height);
