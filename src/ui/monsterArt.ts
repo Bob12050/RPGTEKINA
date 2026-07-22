@@ -6,6 +6,13 @@ import type { Rect } from './window';
 const FAMILY_ATLAS_A = createImageAsset(new URL('../assets/gacha/family-atlas-a.webp', import.meta.url).href);
 const FAMILY_ATLAS_B = createImageAsset(new URL('../assets/gacha/family-atlas-b.webp', import.meta.url).href);
 const RABBIT_PORTRAIT = createImageAsset(new URL('../assets/monster/rabbit-portrait.webp', import.meta.url).href);
+const PUNI_COMBAT = createImageAsset(new URL('../assets/battle/puni-combat-v1.webp', import.meta.url).href);
+const RABBIT_COMBAT = createImageAsset(new URL('../assets/battle/rabbit-combat-v1.webp', import.meta.url).href);
+
+const BATTLE_SPECIES_ART: Partial<Record<string, HTMLImageElement | null>> = {
+  puni: PUNI_COMBAT,
+  rabbit: RABBIT_COMBAT,
+};
 
 const FAMILY_PORTRAITS: Record<Family, { image: HTMLImageElement | null; column: 0 | 1; row: 0 | 1 }> = {
   slime: { image: FAMILY_ATLAS_A, column: 0, row: 0 },
@@ -53,6 +60,9 @@ export function drawSpeciesPortrait(
   rect: Rect,
   alpha = 1,
 ): boolean {
+  if ((species.id === 'puni' || species.id === 'rabbit') && drawBattleSpeciesArt(ctx, species, rect, alpha)) {
+    return true;
+  }
   if (species.id === 'rabbit' && imageReady(RABBIT_PORTRAIT)) {
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -64,6 +74,43 @@ export function drawSpeciesPortrait(
   if (species.id === 'puni') return drawFamilyPortrait(ctx, species.family, rect, alpha);
   if (species.id === 'wolf') return drawFamilyPortrait(ctx, species.family, rect, alpha);
   return false;
+}
+
+/** 専用の透過立ち絵が用意されている種族か。読込前でもレイアウト判定に使える。 */
+export function supportsBattleSpeciesArt(speciesId: string): boolean {
+  return Object.prototype.hasOwnProperty.call(BATTLE_SPECIES_ART, speciesId);
+}
+
+/** 戦場とHUDで共用する、種族固有の高精細な透過立ち絵。 */
+export function drawBattleSpeciesArt(
+  ctx: CanvasRenderingContext2D,
+  species: SpeciesDef,
+  rect: Rect,
+  alpha = 1,
+  flipX = false,
+  alignY: 'center' | 'bottom' = 'center',
+): boolean {
+  const image = BATTLE_SPECIES_ART[species.id] ?? null;
+  if (!imageReady(image)) return false;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (flipX) {
+    const centerX = rect.x + rect.w / 2;
+    ctx.translate(centerX, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-centerX, 0);
+  }
+  const scale = Math.min(rect.w / image.naturalWidth, rect.h / image.naturalHeight);
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  const drawX = rect.x + (rect.w - width) / 2;
+  const drawY = alignY === 'bottom' ? rect.y + rect.h - height : rect.y + (rect.h - height) / 2;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(image, drawX, drawY, width, height);
+  ctx.restore();
+  return true;
 }
 
 /** 高精細アートが共通でも個体を見分けられる、種族固有のピクセル紋章。 */

@@ -347,3 +347,46 @@ final result: passed
 - Open P0/P1/P2 findings: none.
 
 final result: passed
+
+---
+
+# Battle character visual QA
+
+## Character comparison target
+
+- Visual source: `design/mobile-preview/battle-direction-3.png`
+- Primary implementation evidence: `design/mobile-preview/battle-character-implementation-command.png`
+- Focused state evidence: `design/mobile-preview/battle-character-implementation-skill.png`
+- Landscape evidence: `design/mobile-preview/battle-character-implementation-landscape.png`
+- Viewports: 480 × 1040 portrait; 960 × 624 landscape
+- Compared state: first normal quest, wave 1/1, with `ぷに` and `キラーラビット` on the battlefield and in the party HUD
+
+## Character fidelity surfaces
+
+1. Character identity: both field units and HUD portraits now use species-correct, transparent high-resolution art. `ぷに` remains soft and friendly; `キラーラビット` keeps its single horn, pale-pink body, and determined pose.
+2. Art direction: restrained blue/pink saturation, matte shading, and soft dimensional rendering follow direction 3 without returning to the earlier neon or overly glossy look.
+3. Composition: both subjects sit on the plaza ground plane with restrained contact shadows. Enemy labels and gauges remain clear and do not overlap the characters.
+4. Responsive layout: portrait command and skill states preserve the target hierarchy; landscape keeps both characters, HUD cards, and command deck visible without clipping.
+5. Interaction integrity: enemy hit areas and damage-pop anchors follow the new art bounds. Species without dedicated art retain their exact palette-aware pixel sprite, legacy scale, baseline, and label spacing rather than displaying the wrong character.
+
+## Character comparison history
+
+1. Initial battle implementation
+   - [P1] The direction-3 background and UI were high fidelity, but 16 × 16 family sprites made the visible characters feel unfinished and stylistically disconnected.
+2. High-resolution character pass
+   - Generated and installed transparent `ぷに` and `キラーラビット` masters plus optimized WebP runtime copies.
+   - Reused the same species art in battlefield, battle HUD, and species portrait surfaces so character identity stays consistent.
+   - Updated hit testing, damage anchors, responsive sizing, and contact shadows around the new silhouettes.
+3. Final fixes
+   - [P2] A small ground-contact gap was removed with bottom-aligned art rendering.
+   - [P1] Unsupported species initially inherited the larger high-resolution slot baseline. The fallback branch now preserves the legacy 96/144px size, portrait/landscape baseline, and label rhythm; resolved.
+   - Same-state source and implementation images were reviewed together after the fixes. Open P0/P1/P2 findings: none.
+
+## Character validation
+
+- `npm test`: 9 files, 93 tests passed.
+- `npm run build`: TypeScript and Vite production build passed; optimized character assets emitted at 47.67 kB and 63.88 kB.
+- Portrait command, portrait skill, and landscape command states were visually verified after the ground-alignment fix.
+- Dedicated art is intentionally staged per species; the safe exact-species pixel fallback remains for the rest of the roster until each new asset is added.
+
+final result: passed

@@ -30,6 +30,7 @@ import { consumeItem, markSeen } from '../game/state';
 import { drawFancyBg } from '../ui/bg';
 import { drawIcon } from '../ui/icon';
 import { createImageAsset, drawCoverImage, imageReady } from '../ui/media';
+import { drawBattleSpeciesArt, supportsBattleSpeciesArt } from '../ui/monsterArt';
 import { drawMonster } from '../ui/sprites';
 import {
   Button,
@@ -467,12 +468,13 @@ export class BattleScene implements Scene {
 
   /** 敵スプライトのタップ判定領域(名前・ゲージ込みでゆったりめ) */
   private enemyHitAreas(): { unit: BattleUnit; rect: Rect }[] {
-    const scale = this.battle.isBossWave() ? 9 : 6;
-    const size = 16 * scale;
-    return this.enemyPositions().map(({ unit, x, y }) => ({
-      unit,
-      rect: { x: x - 10, y: y - 54, w: size + 20, h: size + 64 },
-    }));
+    return this.enemyPositions().map(({ unit, x, y }) => {
+      const visual = this.enemySpriteRect(unit, x, y);
+      return {
+        unit,
+        rect: { x: visual.x - 10, y: visual.y - 54, w: visual.w + 20, h: visual.h + 64 },
+      };
+    });
   }
 
   /** ダメージ/回復の数字ポップを出す */
@@ -483,13 +485,13 @@ export class BattleScene implements Scene {
     let x = view.w / 2;
     let y = view.h / 2;
     if (unit.side === 'enemy') {
-      const scale = this.battle.isBossWave() ? 9 : 6;
       const pos = this.enemyPositions().find((p) => p.unit.id === unitId);
       if (pos) {
-        x = pos.x + (16 * scale) / 2;
-        y = pos.y + 24;
+        const visual = this.enemySpriteRect(pos.unit, pos.x, pos.y);
+        x = visual.x + visual.w / 2;
+        y = visual.y + visual.h * 0.45;
       } else {
-        y = (isPortrait() ? 500 : 330) - 90; // 倒れた直後などはだいたいの位置
+        y = (isPortrait() ? 515 : 335) - 100; // 倒れた直後などはだいたいの位置
       }
     } else {
       const idx = this.battle.allies.findIndex((a) => a.id === unitId);
@@ -910,34 +912,82 @@ export class BattleScene implements Scene {
     );
   }
 
+  private enemyVisualSize(): number {
+    const count = Math.max(1, this.battle.aliveEnemies().length);
+    if (isPortrait()) {
+      if (this.battle.isBossWave()) return count === 1 ? 190 : 150;
+      if (count <= 2) return 150;
+      if (count === 3) return 128;
+      return 104;
+    }
+    if (this.battle.isBossWave()) return 168;
+    if (count <= 2) return 132;
+    if (count === 3) return 118;
+    return 100;
+  }
+
   private enemyPositions(): { unit: BattleUnit; x: number; y: number }[] {
     const alive = this.battle.aliveEnemies();
-    const scale = this.battle.isBossWave() ? 9 : 6;
-    const size = 16 * scale;
+    const size = this.enemyVisualSize();
     const portraitGap = alive.length <= 1
       ? 0
-      : Math.min(size + 64, (view.w - 48 - size) / (alive.length - 1));
+      : Math.min(size + 34, (view.w - 48 - size) / (alive.length - 1));
     const gap = isPortrait() ? portraitGap : size + 40;
-    const groundY = isPortrait() ? 500 : 330;
+    const groundY = isPortrait() ? 515 : 335;
     return alive.map((unit, i) => ({
       unit,
       x: view.w / 2 + (i - (alive.length - 1) / 2) * gap - size / 2,
-      y: groundY - 30 - size,
+      y: groundY - size,
     }));
   }
 
+  /** 高精細絵がない種族は、従来ピクセル絵の大きさとラベル間隔を保つ。 */
+  private enemySpriteRect(unit: BattleUnit, slotX: number, slotY: number): Rect {
+    const slotSize = this.enemyVisualSize();
+    const species = getSpecies(unit.speciesId);
+    const pixelScale = this.battle.isBossWave() ? 9 : 6;
+    const hasHighResArt = supportsBattleSpeciesArt(species.id);
+    const size = hasHighResArt ? slotSize : 16 * pixelScale;
+    const legacyGroundOffset = isPortrait() ? 45 : 35;
+    const groundY = slotY + slotSize - (hasHighResArt ? 0 : legacyGroundOffset);
+    return {
+      x: slotX + (slotSize - size) / 2,
+      y: groundY - size,
+      w: size,
+      h: size,
+    };
+  }
+
   private drawEnemies(ctx: CanvasRenderingContext2D): void {
-    const scale = this.battle.isBossWave() ? 9 : 6;
     const positions = this.enemyPositions();
     const targets = this.battle.aliveEnemies();
     for (const { unit, x, y } of positions) {
       const sp = getSpecies(unit.speciesId);
+      const visual = this.enemySpriteRect(unit, x, y);
       let dx = 0;
       if (this.shake && this.shake.unitId === unit.id) dx = Math.sin(this.time * 60) * 5;
       const bounce = Math.sin(this.time * 2.2 + x) * 3;
-      drawMonster(ctx, sp.family, sp.palette, x + dx, y + bounce, scale);
+      ctx.save();
+      ctx.fillStyle = 'rgba(65,47,31,0.2)';
+      ctx.beginPath();
+      ctx.ellipse(
+        visual.x + visual.w / 2,
+        visual.y + visual.h - 3,
+        visual.w * 0.31,
+        visual.h * 0.075,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.restore();
+      const artRect = { x: visual.x + dx, y: visual.y + bounce, w: visual.w, h: visual.h };
+      if (!drawBattleSpeciesArt(ctx, sp, artRect, 1, false, 'bottom')) {
+        const pixelScale = Math.max(1, Math.floor(visual.w / 16));
+        drawMonster(ctx, sp.family, sp.palette, visual.x + dx, visual.y + bounce, pixelScale);
+      }
       // 名前とHPゲージ
-      const cx = x + (16 * scale) / 2;
+      const cx = visual.x + visual.w / 2;
       const label = `${unit.name} Lv${unit.level}`;
       ctx.save();
       const labelSize = isPortrait() ? 15 : 16;
@@ -945,24 +995,24 @@ export class BattleScene implements Scene {
       const labelW = Math.max(106, ctx.measureText(label).width + 24);
       fillRounded(
         ctx,
-        { x: cx - labelW / 2, y: y - 50, w: labelW, h: 28 },
+        { x: cx - labelW / 2, y: visual.y - 50, w: labelW, h: 28 },
         10,
         'rgba(55,42,29,0.78)',
         'rgba(241,224,193,0.42)',
       );
       ctx.restore();
-      drawText(ctx, label, cx, y - 45, {
+      drawText(ctx, label, cx, visual.y - 45, {
         align: 'center',
         color: '#f8f1e4',
         font: `bold ${labelSize}px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
       });
-      drawMatteGauge(ctx, cx - 52, y - 15, 104, 9, unit.hp / unit.stats.hp, BATTLE_COLORS.hp);
+      drawMatteGauge(ctx, cx - 52, visual.y - 15, 104, 9, unit.hp / unit.stats.hp, BATTLE_COLORS.hp);
       // ターゲットカーソル
       if (this.phase === 'targetEnemy') {
         const idx = targets.findIndex((t) => t.id === unit.id);
         if (idx === Math.min(this.targetIdx, targets.length - 1)) {
           const arrowBounce = Math.sin(this.time * 6) * 4;
-          drawIcon(ctx, faCaretDown, cx - 10, y - 78 + arrowBounce, 20, BATTLE_COLORS.accent);
+          drawIcon(ctx, faCaretDown, cx - 10, visual.y - 78 + arrowBounce, 20, BATTLE_COLORS.accent);
         }
       }
     }
@@ -1012,8 +1062,11 @@ export class BattleScene implements Scene {
       const species = getSpecies(unit.speciesId);
       const nameColor = unit.hp <= 0 ? '#9e4438' : BATTLE_COLORS.ink;
       if (p && h >= 100) {
-        drawMonster(ctx, species.family, species.palette, x + 14, y + 35, 3);
-        const infoX = x + 74;
+        const artRect = { x: x + 7, y: y + 9, w: 68, h: h - 18 };
+        if (!drawBattleSpeciesArt(ctx, species, artRect, unit.hp <= 0 ? 0.38 : 1)) {
+          drawMonster(ctx, species.family, species.palette, x + 14, y + 35, 3);
+        }
+        const infoX = x + 78;
         const gaugeW = Math.max(60, w - (infoX - x) - 14);
         drawText(ctx, unit.name, infoX, y + 14, {
           color: nameColor,
@@ -1038,8 +1091,11 @@ export class BattleScene implements Scene {
           true,
         );
       } else if (p) {
-        drawMonster(ctx, species.family, species.palette, x + 10, y + 27, 2);
-        const infoX = x + 48;
+        const artRect = { x: x + 5, y: y + 7, w: 43, h: h - 14 };
+        if (!drawBattleSpeciesArt(ctx, species, artRect, unit.hp <= 0 ? 0.38 : 1)) {
+          drawMonster(ctx, species.family, species.palette, x + 10, y + 27, 2);
+        }
+        const infoX = x + 50;
         drawText(ctx, unit.name, infoX, y + 8, {
           color: nameColor,
           font: `bold 14px "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif`,
@@ -1060,7 +1116,10 @@ export class BattleScene implements Scene {
           true,
         );
       } else {
-        drawMonster(ctx, species.family, species.palette, x + 12, y + 26, 3);
+        const artRect = { x: x + 7, y: y + 8, w: 62, h: h - 16 };
+        if (!drawBattleSpeciesArt(ctx, species, artRect, unit.hp <= 0 ? 0.38 : 1)) {
+          drawMonster(ctx, species.family, species.palette, x + 12, y + 26, 3);
+        }
         const infoX = x + 72;
         drawText(ctx, unit.name, infoX, y + 12, { color: nameColor, font: `bold 16px sans-serif` });
         drawText(ctx, `Lv${unit.level}`, x + w - 14, y + 12, { align: 'right', font: '13px sans-serif', color: '#78654e' });
